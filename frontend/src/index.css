@@ -1,0 +1,427 @@
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700;9..144,800&family=Inter:wght@300;400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Base font size — 14px keeps interface compact yet legible. Hero sections use
+   explicit clamp() to stay larger. */
+html {
+    font-size: 14px;
+}
+
+body {
+    margin: 0;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    background: #FFFCF5;
+    color: #1E293B;
+}
+
+h1, h2, h3, h4, h5, h6, .font-display {
+    font-family: 'Fraunces', Georgia, serif;
+    letter-spacing: -0.02em;
+}
+
+code {
+    font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New', monospace;
+}
+
+@layer base {
+  :root {
+        --background: 44 60% 98%;
+        --foreground: 215 30% 18%;
+        --card: 0 0% 100%;
+        --card-foreground: 215 30% 18%;
+        --popover: 0 0% 100%;
+        --popover-foreground: 215 30% 18%;
+        --primary: 173 75% 27%;
+        --primary-foreground: 44 60% 98%;
+        --secondary: 44 40% 94%;
+        --secondary-foreground: 215 30% 18%;
+        --muted: 44 30% 94%;
+        --muted-foreground: 215 15% 40%;
+        --accent: 28 80% 52%;
+        --accent-foreground: 44 60% 98%;
+        --destructive: 0 84.2% 60.2%;
+        --destructive-foreground: 0 0% 98%;
+        --border: 44 20% 88%;
+        --input: 44 20% 88%;
+        --ring: 173 75% 27%;
+        --radius: 0.75rem;
+    }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+    }
+  body {
+    @apply bg-background text-foreground;
+    }
+}
+
+/* ===== Custom Utility Classes ===== */
+.brand-emerald { color: #0F766E; }
+.bg-brand-emerald { background-color: #0F766E; }
+.brand-bronze { color: #B45309; }
+.bg-brand-bronze { background-color: #B45309; }
+.brand-cream { background-color: #FFFCF5; }
+.brand-ivory { background-color: #F8F3E8; }
+.brand-sand { background-color: #EFE7D3; }
+
+.hero-gradient {
+  background:
+    radial-gradient(60% 70% at 80% 0%, rgba(180, 83, 9, 0.10) 0%, rgba(180, 83, 9, 0) 60%),
+    radial-gradient(60% 70% at 0% 100%, rgba(15, 118, 110, 0.12) 0%, rgba(15, 118, 110, 0) 60%),
+    linear-gradient(180deg, #FFFCF5 0%, #FAF5E8 100%);
+}
+
+.section-gradient-emerald {
+  background: linear-gradient(180deg, #FFFCF5 0%, #F2F8F6 100%);
+}
+
+.card-elevated {
+  background: #ffffff;
+  border: 1px solid rgba(15, 118, 110, 0.08);
+  box-shadow: 0 1px 0 rgba(15, 118, 110, 0.02), 0 12px 40px -16px rgba(15, 118, 110, 0.18);
+  transition: transform 0.35s cubic-bezier(.2,.7,.2,1), box-shadow 0.35s ease, border-color 0.35s ease;
+}
+.card-elevated:hover {
+  transform: translateY(-4px);
+  border-color: rgba(15, 118, 110, 0.22);
+  box-shadow: 0 1px 0 rgba(15, 118, 110, 0.04), 0 24px 60px -16px rgba(15, 118, 110, 0.30);
+}
+
+.grain {
+  position: relative;
+}
+.grain::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.04;
+  mix-blend-mode: multiply;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+}
+
+.shine-text {
+  background: linear-gradient(90deg, #0F766E 0%, #B45309 50%, #0F766E 100%);
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: shine 7s linear infinite;
+}
+@keyframes shine {
+  to { background-position: 200% center; }
+}
+
+.floaty {
+  animation: floaty 6s ease-in-out infinite;
+}
+@keyframes floaty {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+}
+
+.fade-up {
+  opacity: 0;
+  transform: translateY(20px);
+  animation: fadeUp 0.9s cubic-bezier(.2,.7,.2,1) forwards;
+}
+@keyframes fadeUp {
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.delay-100 { animation-delay: .1s; }
+.delay-200 { animation-delay: .2s; }
+.delay-300 { animation-delay: .3s; }
+.delay-400 { animation-delay: .4s; }
+.delay-500 { animation-delay: .5s; }
+
+.scroll-x::-webkit-scrollbar { display: none; }
+.scroll-x { scrollbar-width: none; }
+
+.btn-primary {
+  background: #0F766E;
+  color: #FFFCF5;
+  transition: background 0.25s ease, transform 0.25s ease, box-shadow 0.25s ease;
+}
+.btn-primary:hover { background: #0B5E58; transform: translateY(-1px); box-shadow: 0 12px 30px -10px rgba(15,118,110,0.5); }
+
+.btn-accent {
+  background: #B45309;
+  color: #FFFCF5;
+  transition: background 0.25s ease, transform 0.25s ease, box-shadow 0.25s ease;
+}
+.btn-accent:hover { background: #92400E; transform: translateY(-1px); box-shadow: 0 12px 30px -10px rgba(180,83,9,0.5); }
+
+.link-underline {
+  position: relative;
+}
+.link-underline::after {
+  content: '';
+  position: absolute;
+  left: 0; bottom: -3px;
+  height: 1px;
+  width: 0;
+  background: currentColor;
+  transition: width 0.3s ease;
+}
+.link-underline:hover::after { width: 100%; }
+
+/* Marquee */
+.marquee {
+  display: flex;
+  width: max-content;
+  animation: marquee 35s linear infinite;
+}
+@keyframes marquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+
+/* Reveal on scroll — start visible, animate in if the IntersectionObserver
+   adds `.in`. The fallback ensures content is never invisible if JS is slow. */
+/* ===== GLOBAL OVERFLOW & TRANSLATION-SAFE LAYOUT ===========================
+   Prevents horizontal scrollbars after Google Translate replaces text with
+   longer words (Hindi, French, German), and clamps oversized headings.
+   ========================================================================== */
+html, body {
+  overflow-x: hidden !important;
+  max-width: 100vw;
+}
+body {
+  word-break: normal;
+  overflow-wrap: anywhere;
+  hyphens: auto;
+}
+img, svg, video { max-width: 100%; height: auto; }
+
+/* Tame all hero / display headings — never let them break out of viewport */
+h1.font-display, h2.font-display, h3.font-display,
+[data-testid="home-hero-headline"],
+[data-testid="ai-search-hero-headline"] {
+  word-break: keep-all;
+  overflow-wrap: break-word;
+  hyphens: auto;
+  max-width: 100%;
+}
+
+/* Per-language sizing: most non-Latin scripts render WIDER than English.
+   Scale display headings down so the hero fits in one screen across 30 langs. */
+html[lang]:not([lang="en"]) [data-testid="home-hero-headline"],
+html[lang]:not([lang="en"]) [data-testid="ai-search-hero-headline"] {
+  font-size: clamp(1.55rem, 3.4vw, 2.6rem) !important;
+  line-height: 1.15 !important;
+}
+/* Arabic / Urdu / Farsi need a touch more line-height for diacritics */
+html[lang="ar"], html[lang="ur"], html[lang="fa"] {
+  font-family: 'Noto Naskh Arabic', 'Cairo', 'Tahoma', 'Inter', sans-serif;
+}
+html[lang="ar"] [data-testid="home-hero-headline"],
+html[lang="ur"] [data-testid="home-hero-headline"],
+html[lang="fa"] [data-testid="home-hero-headline"] {
+  line-height: 1.3 !important;
+}
+/* CJK languages render very dense — reduce slightly */
+html[lang="zh"] [data-testid="home-hero-headline"],
+html[lang="ja"] [data-testid="home-hero-headline"],
+html[lang="ko"] [data-testid="home-hero-headline"] {
+  font-size: clamp(1.7rem, 3.6vw, 2.8rem) !important;
+}
+/* Indic / Devanagari scripts: descenders need extra leading */
+html[lang="hi"], html[lang="mr"], html[lang="bn"], html[lang="pa"],
+html[lang="ta"], html[lang="te"], html[lang="ml"] {
+  font-family: 'Noto Sans', 'Noto Sans Devanagari', 'Inter', sans-serif;
+}
+html[lang="hi"] [data-testid="home-hero-headline"],
+html[lang="mr"] [data-testid="home-hero-headline"],
+html[lang="bn"] [data-testid="home-hero-headline"] {
+  line-height: 1.25 !important;
+}
+
+/* Body / paragraph sizing for translations — pull text size 0.92x when not English */
+html[lang]:not([lang="en"]) p,
+html[lang]:not([lang="en"]) li,
+html[lang]:not([lang="en"]) button,
+html[lang]:not([lang="en"]) a {
+  letter-spacing: 0 !important;
+}
+
+/* Generic display heading sizing across languages — keep within viewport */
+.hero-h1, [data-testid="home-hero-headline"], [data-testid="ai-search-hero-headline"] {
+  font-size: clamp(1.7rem, 3.8vw, 3rem) !important;
+  line-height: 1.1 !important;
+}
+
+/* ---------- RTL fixes (Arabic / Urdu / Farsi) ---------- */
+html[dir="rtl"] .ml-auto { margin-left: 0; margin-right: auto; }
+html[dir="rtl"] .mr-auto { margin-right: 0; margin-left: auto; }
+html[dir="rtl"] .left-2  { left: auto; right: 0.5rem; }
+html[dir="rtl"] .right-2 { right: auto; left: 0.5rem; }
+html[dir="rtl"] .left-5  { left: auto; right: 1.25rem; }
+html[dir="rtl"] .pr-\[180px\], html[dir="rtl"] [class*="pr-["] { padding-right: 0; padding-left: 180px; }
+html[dir="rtl"] .pl-14 { padding-left: 0; padding-right: 3.5rem; }
+html[dir="rtl"] [class*="-translate-x-"] { transform: translateY(-50%) !important; }
+/* "Book Free Call" button — keep inside viewport in RTL */
+html[dir="rtl"] [data-testid*="book"], html[dir="rtl"] [data-testid*="cta"] {
+  max-width: 100%;
+}
+
+/* ---------- Hero search bar — make the "Find My Match" CTA fit
+              when translated labels are longer than English ---------- */
+[data-testid="home-hero-search-submit"],
+[data-testid="ai-search-hero-submit"] {
+  max-width: 38%;
+  white-space: nowrap;
+  font-size: clamp(0.78rem, 1.05vw, 0.95rem) !important;
+}
+[data-testid="home-hero-search-input"],
+[data-testid="ai-search-hero-input"] {
+  font-size: clamp(0.92rem, 1.1vw, 1.08rem) !important;
+  padding-right: 200px !important;
+  text-overflow: ellipsis;
+}
+html[lang]:not([lang="en"]) [data-testid="home-hero-search-submit"],
+html[lang]:not([lang="en"]) [data-testid="ai-search-hero-submit"] {
+  max-width: 50%;
+}
+html[lang]:not([lang="en"]) [data-testid="home-hero-search-input"],
+html[lang]:not([lang="en"]) [data-testid="ai-search-hero-input"] {
+  padding-right: 230px !important;
+}
+html[dir="rtl"] [data-testid="home-hero-search-input"],
+html[dir="rtl"] [data-testid="ai-search-hero-input"] {
+  padding-right: 3.5rem !important;
+  padding-left: 230px !important;
+}
+@media (max-width: 640px) {
+  [data-testid="home-hero-search-submit"] span,
+  [data-testid="ai-search-hero-submit"] span { display: none; }
+  [data-testid="home-hero-search-input"],
+  [data-testid="ai-search-hero-input"] { padding-right: 70px !important; }
+  [data-testid="home-hero-search-submit"],
+  [data-testid="ai-search-hero-submit"] { padding-left: 14px !important; padding-right: 14px !important; }
+}
+
+/* ────────────────────────────────────────────────────────────────────
+   UNIVERSAL PAGE WIDTH + HERO SPACING — applies to every page so the
+   site never looks "phone-on-desktop". Tight side padding, generous
+   max-width on large viewports.
+   ──────────────────────────────────────────────────────────────────── */
+@media (min-width: 1024px) {
+  .max-w-3xl,
+  .max-w-4xl,
+  .max-w-5xl,
+  .max-w-6xl,
+  .max-w-7xl {
+    max-width: min(1480px, 97vw) !important;
+  }
+}
+@media (min-width: 1280px) {
+  .max-w-3xl,
+  .max-w-4xl,
+  .max-w-5xl,
+  .max-w-6xl,
+  .max-w-7xl {
+    max-width: min(1640px, 97vw) !important;
+  }
+}
+@media (min-width: 1600px) {
+  .max-w-3xl,
+  .max-w-4xl,
+  .max-w-5xl,
+  .max-w-6xl,
+  .max-w-7xl {
+    max-width: min(1820px, 96vw) !important;
+  }
+}
+@media (min-width: 1920px) {
+  .max-w-3xl,
+  .max-w-4xl,
+  .max-w-5xl,
+  .max-w-6xl,
+  .max-w-7xl {
+    max-width: 1880px !important;
+  }
+}
+/* Tighten default side padding */
+@media (min-width: 1024px) {
+  .px-5.lg\:px-8 { padding-left: 1.5rem !important; padding-right: 1.5rem !important; }
+}
+@media (min-width: 1600px) {
+  .px-5.lg\:px-8 { padding-left: 2rem !important; padding-right: 2rem !important; }
+}
+
+/* Kill the empty gap between navbar and hero on every page. The Navbar is
+   fixed at ~64px; we leave ~10–14px breathing room, no more. */
+section.hero-gradient,
+section.hero-gradient + section {
+  padding-top: 0 !important;
+}
+section.hero-gradient > div:first-child {
+  padding-top: 0.75rem !important;
+}
+@media (min-width: 1024px) {
+  section.hero-gradient > div:first-child {
+    padding-top: 1.25rem !important;
+  }
+}
+
+/* Reduce default side padding so the page fills the screen */
+@media (min-width: 1024px) {
+  .px-5.lg\:px-8 { padding-left: 2rem !important; padding-right: 2rem !important; }
+}
+@media (min-width: 1600px) {
+  .px-5.lg\:px-8 { padding-left: 3rem !important; padding-right: 3rem !important; }
+}
+
+/* ---------- Section paddings — tighten so the hero fits in one screen ---------- */
+@media (min-height: 700px) {
+  section.hero-screen { padding-top: 1.5rem !important; padding-bottom: 1.5rem !important; }
+}
+
+/* ---------- Interactive AI search loading ---------- */
+.aria-loading-step {
+  opacity: 0;
+  transform: translateY(8px);
+  animation: ariaStepIn 0.5s cubic-bezier(.2,.7,.2,1) forwards;
+}
+@keyframes ariaStepIn { to { opacity: 1; transform: translateY(0); } }
+
+.aria-orbit {
+  background: conic-gradient(from 0deg, #0F766E, #B45309, #0F766E);
+  -webkit-mask: radial-gradient(circle, transparent 56%, #000 57%);
+          mask: radial-gradient(circle, transparent 56%, #000 57%);
+  animation: ariaSpin 2.2s linear infinite;
+}
+@keyframes ariaSpin { to { transform: rotate(360deg); } }
+.aria-pulse-dot {
+  animation: ariaPulse 1.4s ease-in-out infinite;
+}
+@keyframes ariaPulse { 0%,100% { opacity: 0.4; transform: scale(0.7); } 50% { opacity: 1; transform: scale(1.1); } }
+
+/* ===== Scratch card buttons — translation-safe wrap ===== */
+[data-testid="scratch-card-start"],
+[data-testid="scratch-card-browse"] {
+  font-size: clamp(11px, 1.1vw, 14px) !important;
+  white-space: normal !important;
+  word-break: break-word;
+  line-height: 1.2 !important;
+  min-height: 42px;
+  padding: 8px 14px !important;
+}
+/* Scratch card heading also clamps in long-word languages */
+html[lang]:not([lang="en"]) [data-testid="scratch-card-container"] ~ * h3,
+html[lang]:not([lang="en"]) [role="dialog"] h3.font-display {
+  font-size: clamp(1.1rem, 2.2vw, 1.6rem) !important;
+  line-height: 1.2 !important;
+}
+html[lang]:not([lang="en"]) [role="dialog"] p {
+  font-size: 12px !important;
+  line-height: 1.4 !important;
+}

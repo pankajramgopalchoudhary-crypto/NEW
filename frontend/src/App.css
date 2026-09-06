@@ -1,0 +1,26 @@
+.App { min-height: 100vh; }
+
+/* Smooth scroll */
+html { scroll-behavior: smooth; }
+
+/* Selection */
+::selection { background: #0F766E; color: #FFFCF5; }
+
+/* Custom radial pulse for badges */
+.pulse-dot {
+  position: relative;
+  display: inline-block;
+  width: 8px; height: 8px;
+  border-radius: 9999px;
+  background: #10B981;
+}
+.pulse-dot::after {
+  content: '';
+  position: absolute; inset: 0;
+  border-radius: 9999px;
+  background: #10B981;
+  animation: ping 1.8s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+@keyframes ping {
+  75%, 100% { transform: scale(2.6); opacity: 0; }
+}
