@@ -387,7 +387,7 @@ export default function Compare() {
 
   const ROWS = [
     { label: 'Government Fee', get: (z) => money(z.gov), category: 'Cost' },
-    { label: 'Service Fee', get: (z) => money(z.svc), category: 'Cost' },
+    { label: 'Service Fee', get: (z) => (Number(z.svc) > 0 ? money(z.svc) : 'Included'), category: 'Cost' },
     { label: 'License + 1 Visa (Total)', get: (z) => money(z.govVisa), bold: true, category: 'Cost' },
     { label: 'Annual Renewal', get: (z) => z.renewal || `~90% of original`, category: 'Cost' },
     { label: 'Visa Allotment (Max)', get: (z) => `Up to ${z.maxVis} visa${z.maxVis === 1 ? '' : 's'}`, category: 'Visas' },

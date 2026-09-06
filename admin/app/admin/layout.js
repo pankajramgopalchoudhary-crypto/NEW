@@ -5,7 +5,7 @@ import Link from 'next/link';
 import {
   LayoutGrid, LineChart, Users, UserCircle, FileText, Receipt, CreditCard,
   Tag, Package as PackageIcon, Ticket, MessageSquare, Map, Scale, Search, UsersRound, Crown, Settings, LogOut,
-  Mail, Sparkles
+  Mail, Sparkles, Layers
 } from 'lucide-react';
 import BrandMark from '@/components/BrandMark';
 
@@ -31,6 +31,7 @@ const NAV = [
     { href: '/admin/coupons', label: 'Coupons', icon: Ticket, perm: 'coupons' },
     { href: '/admin/founders-club', label: 'Founders Club', icon: Crown, perm: 'founders-club' },
     { href: '/admin/services', label: 'Service Catalog', icon: Tag, perm: 'services', roles: ['founder', 'manager'] },
+    { href: '/admin/catalog', label: 'Price Catalog', icon: Layers, perm: 'services', roles: ['founder', 'manager'] },
     { href: '/admin/jurisdictions', label: 'Jurisdictions', icon: Map, perm: 'jurisdictions', roles: ['founder'] },
   ]},
   { group: 'System', items: [

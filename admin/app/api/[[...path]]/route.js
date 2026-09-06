@@ -634,6 +634,121 @@ async function handle(request, { params }) {
       return json({ ok: true });
     }
 
+    // ============ JURISDICTION & PACKAGE CATALOG (Mongo, canonical prices) ============
+    if (route === '/admin/catalog/jurisdictions' && method === 'GET') {
+      const auth = await requireRole(request, 'founder', 'manager');
+      if (!auth.ok) return json({ error: auth.error }, auth.status);
+      const c = await col('jurisdiction_catalog');
+      const rows = await c.find({}).sort({ kind: 1, name: 1 }).toArray();
+      return json({ jurisdictions: rows.map(({ _id, ...rest }) => ({ id: _id, ...rest })) });
+    }
+
+    if (route.startsWith('/admin/catalog/jurisdictions/') && method === 'PATCH') {
+      const auth = await requireRole(request, 'founder');
+      if (!auth.ok) return json({ error: auth.error }, auth.status);
+      const slug = decodeURIComponent(route.split('/').pop());
+      const body = await request.json();
+      const patch = { updated_at: new Date().toISOString() };
+      for (const k of ['name', 'fullName', 'loc', 'emirate', 'proc', 'acts', 'physical', 'tag',
+                       'highlight', 'officialUrl', 'pricing_note', 'status', 'kind']) {
+        if (body[k] !== undefined) patch[k] = body[k];
+      }
+      for (const k of ['gov', 'govVisa', 'svc', 'maxVis', 'ownership', 'corpTax']) {
+        if (body[k] !== undefined) {
+          const n = Number(body[k]);
+          if (!Number.isFinite(n) || n < 0) return json({ error: `${k} must be a number >= 0` }, 400);
+          patch[k] = n;
+        }
+      }
+      if (body.is_active !== undefined) patch.is_active = !!body.is_active;
+      const c = await col('jurisdiction_catalog');
+      const r = await c.updateOne({ slug }, { $set: patch });
+      if (!r.matchedCount) return json({ error: 'Jurisdiction not found' }, 404);
+      await auditLog(auth.session, 'catalog.jurisdiction.update', { slug, ...patch });
+      return json({ ok: true });
+    }
+
+    if (route === '/admin/catalog/packages' && method === 'GET') {
+      const auth = await requireRole(request, 'founder', 'manager');
+      if (!auth.ok) return json({ error: auth.error }, auth.status);
+      const { searchParams } = new URL(request.url);
+      const freezone = searchParams.get('freezone');
+      const c = await col('package_catalog');
+      const rows = await c.find(freezone ? { freezone } : {}).sort({ freezone: 1, package_price: 1 }).toArray();
+      return json({ packages: rows.map(({ _id, ...rest }) => ({ id: _id, ...rest })) });
+    }
+
+    if (route === '/admin/catalog/packages' && method === 'POST') {
+      const auth = await requireRole(request, 'founder');
+      if (!auth.ok) return json({ error: auth.error }, auth.status);
+      const body = await request.json();
+      if (!body.freezone || !body.package_name) return json({ error: 'freezone and package_name are required' }, 400);
+      const mode = body.pricing_mode === 'on_request' ? 'on_request' : 'fixed';
+      const price = Number(body.package_price);
+      if (mode === 'fixed' && (!Number.isFinite(price) || price <= 0)) {
+        return json({ error: 'package_price must be greater than 0 for fixed pricing' }, 400);
+      }
+      const c = await col('package_catalog');
+      const doc = {
+        _id: uuid(),
+        freezone: body.freezone,
+        category: body.category || 'Core UAE',
+        package_name: body.package_name,
+        duration: body.duration || '1 Year',
+        workspace: body.workspace || '',
+        package_price: mode === 'fixed' ? price : 0,
+        offer_price: mode === 'fixed' ? price : 0,
+        original_price: body.original_price || '',
+        currency: 'AED',
+        includes_visa: body.includes_visa ?? 0,
+        notes: body.notes || '',
+        pricing_mode: mode,
+        source: 'admin',
+        is_active: body.is_active !== false,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+      await c.insertOne(doc);
+      await auditLog(auth.session, 'catalog.package.create', { freezone: doc.freezone, package_name: doc.package_name, price: doc.package_price });
+      const { _id, ...rest } = doc;
+      return json({ ok: true, package: { id: _id, ...rest } });
+    }
+
+    if (route.startsWith('/admin/catalog/packages/') && method === 'PATCH') {
+      const auth = await requireRole(request, 'founder');
+      if (!auth.ok) return json({ error: auth.error }, auth.status);
+      const id = decodeURIComponent(route.split('/').pop());
+      const body = await request.json();
+      const patch = { updated_at: new Date().toISOString() };
+      for (const k of ['freezone', 'category', 'package_name', 'duration', 'workspace', 'notes', 'includes_visa']) {
+        if (body[k] !== undefined) patch[k] = body[k];
+      }
+      if (body.pricing_mode !== undefined) patch.pricing_mode = body.pricing_mode === 'on_request' ? 'on_request' : 'fixed';
+      if (body.is_active !== undefined) patch.is_active = !!body.is_active;
+      if (body.package_price !== undefined) {
+        const price = Number(body.package_price);
+        if (!Number.isFinite(price) || price < 0) return json({ error: 'package_price must be a number >= 0' }, 400);
+        patch.package_price = price;
+        patch.offer_price = price;
+      }
+      const c = await col('package_catalog');
+      const r = await c.updateOne({ _id: id }, { $set: patch });
+      if (!r.matchedCount) return json({ error: 'Package not found' }, 404);
+      await auditLog(auth.session, 'catalog.package.update', { id, ...patch });
+      return json({ ok: true });
+    }
+
+    if (route.startsWith('/admin/catalog/packages/') && method === 'DELETE') {
+      const auth = await requireRole(request, 'founder');
+      if (!auth.ok) return json({ error: auth.error }, auth.status);
+      const id = decodeURIComponent(route.split('/').pop());
+      const c = await col('package_catalog');
+      const r = await c.updateOne({ _id: id }, { $set: { is_active: false, updated_at: new Date().toISOString() } });
+      if (!r.matchedCount) return json({ error: 'Package not found' }, 404);
+      await auditLog(auth.session, 'catalog.package.deactivate', { id });
+      return json({ ok: true });
+    }
+
     // ============ SERVICE CATALOG (Mongo `service_catalog`) ============
     // Single canonical price source for standalone purchasable services.
     if (route === '/admin/services' && method === 'GET') {
@@ -1085,8 +1200,13 @@ async function handle(request, { params }) {
         const body = await request.json();
         const { status, priority } = body;
         if (priority) {
-          const tickets = await col('tickets');
-          await tickets.updateOne({ ticketId }, { $set: { priority, updatedAt: new Date() } });
+          // Same store as the customer portal: support_tickets, keyed by _id or ticket_number.
+          const tickets = await col('support_tickets');
+          const r = await tickets.updateOne(
+            { $or: [{ _id: ticketId }, { ticket_number: ticketId }, { reference: ticketId }] },
+            { $set: { priority, updated_at: new Date().toISOString() } },
+          );
+          if (!r.matchedCount) return json({ error: `Ticket ${ticketId} not found` }, 404);
           return json({ ok: true, priority });
         }
         try {

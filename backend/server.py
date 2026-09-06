@@ -201,13 +201,16 @@ app.include_router(ai_support_router)
 from services_catalog import router as services_router, ensure_defaults as _services_defaults  # noqa: E402
 app.include_router(services_router)
 
+from catalog import router as catalog_router, ensure_defaults as _catalog_defaults  # noqa: E402
+app.include_router(catalog_router)
+
 from orders import router as orders_router  # noqa: E402
 app.include_router(orders_router)
 
 
 @app.on_event("startup")
 async def _init_extension_platform():
-    for fn in (_email_indexes, _sla_defaults, _ai_defaults, _services_defaults):
+    for fn in (_email_indexes, _sla_defaults, _ai_defaults, _services_defaults, _catalog_defaults):
         try:
             await fn()
         except Exception as e:

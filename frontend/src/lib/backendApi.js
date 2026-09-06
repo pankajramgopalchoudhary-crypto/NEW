@@ -74,6 +74,14 @@ export const paymentsApi = {
   status: (session_id) => api.get(`/api/payments/checkout/status/${session_id}`, { auth: false }),
 };
 
+// Canonical jurisdiction / package / add-on catalog (Mongo, admin-editable).
+export const catalogApi = {
+  all: () => api.get('/api/catalog', { auth: false }),
+  jurisdictions: (kind) => api.get(`/api/catalog/jurisdictions${kind ? `?kind=${kind}` : ''}`, { auth: false }),
+  packages: (freezone) => api.get(`/api/catalog/packages${freezone ? `?freezone=${encodeURIComponent(freezone)}` : ''}`, { auth: false }),
+  jurisdiction: (slug) => api.get(`/api/catalog/jurisdictions/${slug}`, { auth: false }),
+};
+
 // Canonical standalone service catalog (Mongo `service_catalog`, admin-editable).
 export const servicesApi = {
   list: (category) => api.get(`/api/services${category ? `?category=${encodeURIComponent(category)}` : ''}`, { auth: false }),
@@ -84,6 +92,7 @@ export const servicesApi = {
 export const ordersApi = {
   create: (payload) => api.post('/api/orders', payload, { auth: false }),
   get: (id) => api.get(`/api/orders/${id}`, { auth: false }),
+  founderStatus: (email) => api.get(`/api/orders/founder-status?email=${encodeURIComponent(email)}`, { auth: false }),
 };
 
 export const adminApi = {

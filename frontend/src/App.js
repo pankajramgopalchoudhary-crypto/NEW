@@ -1,4 +1,4 @@
-import React, { Suspense, lazy, useEffect } from 'react';
+import React, { Suspense, lazy, useEffect, useState } from 'react';
 import './App.css';
 import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
@@ -9,6 +9,41 @@ import ScratchCard from './components/ScratchCard';
 import UniversalLeadEnquiry from './components/UniversalLeadEnquiry';
 import { Privacy, Terms, Refund, DataDeletion } from './pages/Legal';
 import ErrorBoundary from './components/ErrorBoundary';
+import { loadCatalog } from './data/catalog';
+
+/**
+ * Jurisdiction and package prices are served by `GET /api/catalog` (canonical
+ * Mongo catalog, admin-editable). Routes wait for it so no page ever renders
+ * a stale or missing price.
+ */
+function CatalogGate({ children }) {
+  const [ready, setReady] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    let alive = true;
+    loadCatalog()
+      .then(() => alive && setReady(true))
+      .catch((e) => alive && setError(e.message || 'Could not load live pricing'));
+    return () => { alive = false; };
+  }, []);
+
+  if (error) {
+    return (
+      <div className="min-h-[60vh] grid place-items-center px-6" data-testid="catalog-load-error">
+        <div className="max-w-md text-center">
+          <div className="text-base md:text-lg font-semibold text-slate-900">Live pricing is unavailable</div>
+          <p className="mt-2 text-sm text-slate-600">{error}</p>
+          <button onClick={() => window.location.reload()} className="mt-5 rounded-full bg-[#0A3D34] text-white px-6 py-2.5 text-sm font-semibold">
+            Try again
+          </button>
+        </div>
+      </div>
+    );
+  }
+  if (!ready) return <PageLoader />;
+  return children;
+}
 
 const Home = lazy(() => import('./pages/Home'));
 const FreeZones = lazy(() => import('./pages/FreeZones'));
@@ -187,6 +222,7 @@ function App() {
             <Shell>
               <ErrorBoundary>
                 <Suspense fallback={<PageLoader />}>
+                  <CatalogGate>
                   <Routes>
                   <Route path="/" element={<Home />} />
                   <Route path="/free-zones" element={<FreeZones />} />
@@ -224,6 +260,7 @@ function App() {
                   <Route path="/refund" element={<Refund />} />
                   <Route path="/data-deletion" element={<DataDeletion />} />
                 </Routes>
+                  </CatalogGate>
               </Suspense>
               </ErrorBoundary>
               <WhatsAppFloatingButton />

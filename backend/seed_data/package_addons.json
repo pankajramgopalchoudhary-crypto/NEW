@@ -1,0 +1,112 @@
+[
+ {
+  "freezone": "IFZA",
+  "addon_name": "Status Change Inside Country",
+  "price": 1600,
+  "currency": "AED",
+  "unit": "per person",
+  "notes": "Required when applying inside UAE",
+  "source": "user_partner_circular_april_2026",
+  "is_active": "true"
+ },
+ {
+  "freezone": "IFZA",
+  "addon_name": "Investor / Partner Title",
+  "price": 1000,
+  "currency": "AED",
+  "unit": "per person",
+  "notes": "Investor/partner title fee",
+  "source": "user_partner_circular_april_2026",
+  "is_active": "true"
+ },
+ {
+  "freezone": "IFZA",
+  "addon_name": "Extra Activity",
+  "price": 1000,
+  "currency": "AED",
+  "unit": "per activity per year",
+  "notes": "For each extra activity",
+  "source": "user_partner_circular_april_2026",
+  "is_active": "true"
+ },
+ {
+  "freezone": "IFZA",
+  "addon_name": "VIP E-Visa",
+  "price": 2000,
+  "currency": "AED",
+  "unit": "per application",
+  "notes": "24 business hours guaranteed",
+  "source": "user_partner_circular_april_2026",
+  "is_active": "true"
+ },
+ {
+  "freezone": "IFZA",
+  "addon_name": "VIP Residence Visa",
+  "price": 1500,
+  "currency": "AED",
+  "unit": "per application",
+  "notes": "24 business hours guaranteed",
+  "source": "user_partner_circular_april_2026",
+  "is_active": "true"
+ },
+ {
+  "freezone": "IFZA",
+  "addon_name": "Concierge VIP Medical and EID",
+  "price": 3500,
+  "currency": "AED",
+  "unit": "per person",
+  "notes": "Pickup/drop-off, PRO assistance, 30-minute medical result, same-day EID application and biometrics",
+  "source": "user_partner_circular_april_2026",
+  "is_active": "true"
+ },
+ {
+  "freezone": "IFZA",
+  "addon_name": "Concierge VIP Medical, EID and Residence Visa",
+  "price": 4400,
+  "currency": "AED",
+  "unit": "per person",
+  "notes": "Full concierge plus 24-hour residence visa approval",
+  "source": "user_partner_circular_april_2026",
+  "is_active": "true"
+ },
+ {
+  "freezone": "SHAMS",
+  "addon_name": "Corporate Tax Registration",
+  "price": 850,
+  "currency": "AED",
+  "unit": "per month",
+  "notes": "FTA registration/document review/portal submission/compliance guidance",
+  "source": "shams_packages_page_and_user_screenshot",
+  "is_active": "true"
+ },
+ {
+  "freezone": "SHAMS",
+  "addon_name": "VIP Medical & Biometrics",
+  "price": 2000,
+  "currency": "AED",
+  "unit": "per year",
+  "notes": "Private transport, concierge support, priority coordination",
+  "source": "shams_packages_page_and_user_screenshot",
+  "is_active": "true"
+ },
+ {
+  "freezone": "SHAMS",
+  "addon_name": "Dependent Visa",
+  "price": 5000,
+  "currency": "AED",
+  "unit": "per application",
+  "notes": "Entry permit/status change/medical/EID/document support/visa stamping",
+  "source": "shams_packages_page_and_user_screenshot",
+  "is_active": "true"
+ },
+ {
+  "freezone": "SHAMS",
+  "addon_name": "Dedicated Account Manager Additional Stakeholder",
+  "price": 1000,
+  "currency": "AED",
+  "unit": "per stakeholder",
+  "notes": "Additional stakeholder beyond included support",
+  "source": "shams_packages_page_and_user_screenshot",
+  "is_active": "true"
+ }
+]

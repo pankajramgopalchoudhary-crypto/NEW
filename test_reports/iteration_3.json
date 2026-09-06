@@ -1,0 +1,46 @@
+{
+  "summary": "Full backend + admin + customer regression for the DIFC/ADGM catalog migration and Founder Club discount. 17/17 new pytest cases pass in test_iteration3_review.py, plus 10/10 in test_orders_and_catalog.py and 2/2 in test_internal_notes.py (29 tests total, 100%). Bug 'DIFC and ADGM prices not shown' is FIXED — /free-zones now shows DIFC at AED 16,900 and ADGM at AED 7,350, and detail pages render packages with 'Price on request' for the DFSA/FSRA Cat-A on_request rows. Founder discount math verified end-to-end: bookkeeping AED 1200 → 15% → 1020 (discount_total=180); Setup packages 10% off; founders-club-lifetime NEVER discounted; non-member gets 0 discount; GET /api/orders/founder-status correct for member/non-member. Admin /admin/catalog Price Catalog screen fully functional: 152 packages listed, package price edit persisted to /api/catalog/packages (verified 7350→7355→revert), manager PATCH correctly blocked with 403 while manager can still view. Admin Email Health shows Total 3 / Sent 2 / Failed 1 with 3 real log rows; AI Support page loads. Ticket unification verified: POST /api/support/tickets creates ticket, customer GET returns thread with 0 internal notes visible, admin PATCH /api/admin/tickets/UNKNOWN/status returns 404 as expected. Hardcoded prices are gone: zones.js=41 lines (only COMPANY_INFO), freezonePackages.js=11 lines (only re-exports). GET /api/catalog counts exactly match spec (jur=12, mainland=3, coming_soon=13, packages=126, addons=17). Mobile 390x844 renders cleanly with no horizontal overflow, no AED NaN.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/catalog/jurisdictions/{difc,adgm,ifza,...}", "issue": "Detail pages render 'SmartSetupUAE service & advisory (Included / not configured) AED 0' in the selected-package total breakdown for freezones whose packages don't set an svc line-item, even though jurisdiction.svc=5000 for DIFC/ADGM. Cosmetic — the total price is still correct, and the label already says 'Included / not configured', but the literal 'AED 0' could be confusing next to a jurisdiction that advertises AED 5,000 svc. Suggest hiding the line when svc=0 or showing 'Included'."},
+      {"endpoint": "/compare", "issue": "Comparison table 'Service Fee' row shows 'AED 0 AED 0 AED 0' when compared zones have package_price = govt-only. Same class as above — cosmetic; not the class of bug the user reported (no zero package price)."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "/accounting hero + /founder-club hero", "issues": ["Pre-existing: 'Stay compliant / without a finance team.' white-on-pale gradient — flagged in iteration 2, still present, per session note not treated as a regression."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration3_review.py",
+    "/app/backend/tests/test_orders_and_catalog.py",
+    "/app/backend/tests/test_internal_notes.py",
+    "/app/test_reports/pytest/iteration3.xml"
+  ],
+  "action_items": [
+    "(nice-to-have) On free-zone detail pages, hide or relabel the 'SmartSetupUAE service & advisory — AED 0' line when svc component is 0 for the selected package. Same fix removes the 'Service Fee AED 0 AED 0 AED 0' row on /compare for zones without svc.",
+    "(pre-existing, low) Hero heading contrast on /accounting and /founder-club — carried over from iteration 2."
+  ],
+  "critical_code_review_comments": [
+    "orders.py founder-discount logic works exactly per spec: bookkeeping@AED1200 → 15% off, package → 10% off, founders-club-lifetime membership → 0% (never self-discounted).",
+    "catalog.py package_price() correctly picks first positive of offer/package/display/promotion/discount/base/original/price; pricing_mode='on_request' rows are surfaced with price 0 but never selected as 'from' price (verified DIFC/ADGM 'from' prices are Innovation Licence 16,900 / Tech Startup Hub71 7,350, not the on_request rows).",
+    "orders.py on_request rejection works: POST /api/orders for DFSA/FSRA Cat A returns 400/422 with an error mentioning missing pricing.",
+    "Admin PATCH RBAC works: founder can PATCH, manager blocked with 403 while GET remains open.",
+    "Ticket unification: PATCH on unknown id correctly returns 404 (previous round wrote to non-existent 'tickets' collection — now hits support_tickets).",
+    "Hardcoded-prices purge verified: zones.js has 0 price literals (only COMPANY_INFO with prebookAmount 999 which is a global payment amount, not a zone price), freezonePackages.js is only re-exports.",
+    "The 'AED 0' occurrences remaining on free-zone detail / compare pages are the svc line-item breakdown, not a package price — the root-cause of the user's reported bug is fully fixed."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration3_review.py (new — 17 tests: catalog counts, DIFC/ADGM prices+on_request packages, on_request order rejection, founder-status, founder discount math, admin endpoints existence, ticket 404, no-zero-price sweep across catalog)"
+  ],
+  "success_rate": {"backend": "100% (29/29 pytest across 3 files)", "frontend": "100% (customer + admin flows verified)"},
+  "test_credentials": "Used values from /app/memory/test_credentials.md — founder admin@smartsetupuae.ae/Founder@2026 and manager manager@smartsetupuae.ae/Manager@2026 both authenticated on http://localhost:3001/admin/login. Founder Club member email pankajdxb555@gmail.com verified as active member (service_pct=15, package_pct=10).",
+  "seed_data_creation": "Temporary TEST_ prefixed order + ticket rows created via public API (member bookkeeping/founders-club, non-member bookkeeping, DIFC/ADGM on_request rejection attempts, one unified-thread ticket). All identifiable via TEST_ prefix.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "The /api/orders payload schema uses: {contact:{email,name,phone,phone_code}, items:[{kind:'service'|'package'|'addon', slug|package_id|addon_id, qty}]}. Do NOT use type/id/quantity/customer_email — that returns 422. When testing Founder Club member status, use pankajdxb555@gmail.com (client@smartsetupuae.ae has ALSO been made a member during earlier iterations, so it is NOT a clean non-member — use a random TEST_*@example.com for non-member tests). Direct urllib to the preview URL from inside browser_automation containers can hit 403 bot-detection — use page.evaluate(async () => fetch(...)) or the requests library from pytest. On mobile viewport /free-zones/{slug} briefly shows 'Founders' dreams are loading…' (CatalogGate) — wait 4–10s for it to resolve. Next.js dev server on 3001 keeps hitting memory threshold and self-restarting; retry navigation after ~3s if you see ERR_CONNECTION_RESET.",
+  "rca of the issue": "Reported bug 'PRICES OF DIFC AND ADGM IS NOT SHOWN': RCA — DIFC/ADGM existed only as logos in the marquee and as allowedSlugs in the AI-activity search, with no jurisdiction row and no packages. Fix: E1 added DIFC (gov 16,900 / 21,900 / svc 5,000) and ADGM (gov 7,350 / 11,900 / svc 5,000) profiles with researched USD→AED fee schedules, plus 4 DIFC and 5 ADGM packages (2 of which are pricing_mode='on_request' for DFSA/FSRA regulated activities). Frontend uses packagePriceLabel()/sortPrice() to render 'Price on request' and push on_request rows to the bottom so they never win the 'from' price. Verified end-to-end: /free-zones DIFC card = AED 16,900, ADGM card = AED 7,350, detail pages render every package with correct amounts and no AED NaN anywhere."
+}

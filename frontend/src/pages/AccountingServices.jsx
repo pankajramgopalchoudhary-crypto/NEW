@@ -5,7 +5,7 @@ import Footer from '../components/Footer';
 import { Button } from '../components/ui/button';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../hooks/use-toast';
-import { servicesApi, paymentsApi } from '../lib/backendApi';
+import { servicesApi, paymentsApi, ordersApi } from '../lib/backendApi';
 import { createServiceOrder } from '../lib/checkoutSupabase';
 import { CheckCircle2, Loader2, Calculator, FileCheck2, BookOpenCheck, ShieldCheck, ArrowRight } from 'lucide-react';
 
@@ -25,6 +25,15 @@ export default function AccountingServices() {
   const [error, setError] = useState('');
   const [selected, setSelected] = useState([]);
   const [busy, setBusy] = useState(false);
+  const [founder, setFounder] = useState({ member: false, service_pct: 0 });
+
+  useEffect(() => {
+    if (!user?.email) return;
+    ordersApi.founderStatus(user.email).then(setFounder).catch(() => {});
+  }, [user?.email]);
+
+  const memberPrice = (price) =>
+    founder.member ? Math.round(Number(price) * (1 - founder.service_pct / 100)) : Number(price);
 
   useEffect(() => {
     let alive = true;
@@ -42,8 +51,8 @@ export default function AccountingServices() {
     setSelected((prev) => (prev.includes(slug) ? prev.filter((s) => s !== slug) : [...prev, slug]));
 
   const total = useMemo(
-    () => services.filter((s) => selected.includes(s.slug)).reduce((sum, s) => sum + Number(s.price_aed || 0), 0),
-    [services, selected],
+    () => services.filter((s) => selected.includes(s.slug)).reduce((sum, s) => sum + memberPrice(s.price_aed), 0),
+    [services, selected, founder],
   );
 
   const buy = async (slugs) => {
@@ -93,6 +102,25 @@ export default function AccountingServices() {
 
       <section className="bg-white py-16">
         <div className="max-w-6xl mx-auto px-5">
+          {founder.member && (
+            <div className="mb-8 rounded-2xl border border-[#0A3D34]/20 bg-[#0A3D34]/[0.04] px-5 py-4 flex items-center gap-3" data-testid="founder-member-banner">
+              <span className="text-[10px] uppercase tracking-[0.2em] font-bold text-[#0A3D34]">Founder Club</span>
+              <span className="text-sm text-slate-700">
+                Your membership is active — every price below already has your {founder.service_pct}% member discount applied.
+              </span>
+            </div>
+          )}
+          {!founder.member && user && (
+            <div className="mb-8 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3" data-testid="founder-upsell-banner">
+              <span className="text-sm text-slate-700">
+                Founder Club members get 15% off every service below and 10% off company setup packages.
+              </span>
+              <button onClick={() => navigate('/founder-club')} data-testid="founder-upsell-cta" className="text-sm font-semibold text-[#0A3D34] underline whitespace-nowrap">
+                Join for AED 999 →
+              </button>
+            </div>
+          )}
+
           {loading && (
             <div className="flex items-center gap-2 text-slate-500" data-testid="services-loading">
               <Loader2 className="h-4 w-4 animate-spin" /> Loading live pricing…
@@ -129,10 +157,26 @@ export default function AccountingServices() {
                   </div>
 
                   <h2 className="mt-5 font-display text-base md:text-lg font-semibold text-slate-900">{svc.name}</h2>
-                  <div className="mt-2 font-display text-3xl font-semibold text-slate-900" data-testid={`service-price-${svc.slug}`}>
-                    AED {Number(svc.price_aed).toLocaleString()}
-                  </div>
-                  <div className="text-sm text-slate-500 mt-1" data-testid={`service-label-${svc.slug}`}>{svc.price_label}</div>
+                  {founder.member ? (
+                    <>
+                      <div className="mt-2 flex items-baseline gap-3">
+                        <div className="font-display text-3xl font-semibold text-slate-900" data-testid={`service-price-${svc.slug}`}>
+                          AED {memberPrice(svc.price_aed).toLocaleString()}
+                        </div>
+                        <div className="text-base text-slate-400 line-through">AED {Number(svc.price_aed).toLocaleString()}</div>
+                      </div>
+                      <div className="text-sm text-[#0A3D34] font-semibold mt-1" data-testid={`service-label-${svc.slug}`}>
+                        Founder Club price · {founder.service_pct}% off
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="mt-2 font-display text-3xl font-semibold text-slate-900" data-testid={`service-price-${svc.slug}`}>
+                        AED {Number(svc.price_aed).toLocaleString()}
+                      </div>
+                      <div className="text-sm text-slate-500 mt-1" data-testid={`service-label-${svc.slug}`}>{svc.price_label}</div>
+                    </>
+                  )}
                   <p className="mt-4 text-sm text-slate-600 leading-relaxed">{svc.description}</p>
 
                   <ul className="mt-5 space-y-2">

@@ -6,7 +6,7 @@ import LeadBox from '../components/LeadBox';
 import PageFAQ from '../components/PageFAQ';
 import { Button } from '../components/ui/button';
 import { getZoneBySlug, ZONES, ADD_ONS } from '../data/zones';
-import { loadFreezonePricingBundle, mergeZoneWithLivePackage, mergeZonesWithLivePackages, getZonePackages, getZoneBenefits, getZoneAddons, getZoneDiscounts } from '../lib/pricingService';
+import { loadFreezonePricingBundle, mergeZoneWithLivePackage, mergeZonesWithLivePackages, getZonePackages, getZoneBenefits, getZoneAddons, getZoneDiscounts, sortPrice, packagePriceLabel } from '../lib/pricingService';
 import { ChevronRight, MapPin, Clock, Users2, ShieldCheck, CheckCircle2, XCircle, Building2, Sparkles, ArrowRight, Globe, ArrowUpRight } from 'lucide-react';
 
 // Per-freezone FAQ generator — every zone gets 6 SEO-rich, specific Q&As.
@@ -57,7 +57,7 @@ export default function FreeZoneDetail() {
   const pickCheapestByVisa = (n) =>
     zonePackages
       .filter((p) => (p.visa_count || 0) === n)
-      .sort((a, b) => (a.base_price || 0) - (b.base_price || 0))[0];
+      .sort((a, b) => sortPrice(a) - sortPrice(b))[0];
   let popularPackages = [0, 1, 2].map(pickCheapestByVisa).filter(Boolean);
   // For RAKEZ, ensure we show exactly 3 prices
   if (zone.slug === 'rakez' && popularPackages.length < 3) {
@@ -161,7 +161,7 @@ export default function FreeZoneDetail() {
               <div>
                 <div className="text-[10px] uppercase tracking-[0.22em] text-slate-500 font-semibold">From</div>
                 <div className="font-display text-4xl font-bold text-slate-900">AED {zone.gov.toLocaleString()}</div>
-                <div className="text-xs text-slate-500">starting package{zone.priceSource === 'supabase' ? ' · live Supabase' : ''}</div>
+                <div className="text-xs text-slate-500">starting package{zone.priceSource === 'supabase' ? ' · live catalog price' : ''}</div>
               </div>
               <div className="h-12 w-px bg-slate-200" />
               <div>
@@ -230,7 +230,7 @@ export default function FreeZoneDetail() {
                   <option value="">More packages ({extraPackages.length})…</option>
                   {extraPackages.map((p) => {
                     const k = String(p.package_id || p.id);
-                    return <option key={k} value={k}>{p.package_name} — AED {(p.base_price || 0).toLocaleString()} · {p.visa_count || 0} visa{(p.visa_count || 0) === 1 ? '' : 's'}</option>;
+                    return <option key={k} value={k}>{p.package_name} — {packagePriceLabel(p)} · {p.visa_count || 0} visa{(p.visa_count || 0) === 1 ? '' : 's'}</option>;
                   })}
                 </select>
               </div>
@@ -258,7 +258,7 @@ export default function FreeZoneDetail() {
                     <div className="mt-5 rounded-2xl bg-slate-50 p-4 space-y-2.5">
                       <div className="flex items-baseline justify-between pb-2.5 border-b border-slate-200/70">
                         <div className="text-[10px] uppercase tracking-[0.18em] text-slate-500 font-semibold">Package Price</div>
-                        <div className="font-display text-2xl font-bold text-slate-900">AED {price.toLocaleString()}</div>
+                        <div className="font-display text-2xl font-bold text-slate-900">{packagePriceLabel(pkg)}</div>
                       </div>
                       <div className="flex items-center justify-between text-sm">
                         <div className="text-slate-600">Included visas</div>
@@ -299,14 +299,16 @@ export default function FreeZoneDetail() {
               <div className="space-y-3">
                 {[
                   { l: 'Authority/package amount', v: selectedGovernmentTotal, sub: selectedPackage?.workspace || 'Selected authority package' },
-                  { l: 'SmartSetupUAE service & advisory', v: selectedServiceFee, sub: selectedServiceFee > 0 ? 'End-to-end setup' : 'Included / not configured' },
+                  { l: 'SmartSetupUAE service & advisory', v: selectedServiceFee, sub: selectedServiceFee > 0 ? 'End-to-end setup' : 'Included in the package' },
                 ].map((r) => (
                   <div key={r.l} className="flex items-center justify-between border-b border-slate-100 pb-3">
                     <div>
                       <div className="font-medium text-slate-800">{r.l}</div>
                       <div className="text-xs text-slate-500">{r.sub}</div>
                     </div>
-                    <div className="font-display font-semibold text-slate-900">AED {r.v.toLocaleString()}</div>
+                    <div className="font-display font-semibold text-slate-900">
+                      {r.v > 0 ? `AED ${r.v.toLocaleString()}` : 'Included'}
+                    </div>
                   </div>
                 ))}
                 <div className="flex items-center justify-between pt-2">

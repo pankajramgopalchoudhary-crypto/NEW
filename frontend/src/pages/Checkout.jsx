@@ -139,7 +139,7 @@ export default function Checkout() {
       } catch (e) {
         if (cancelled) return;
         setPricingLoaded(false);
-        setPricingError(e.message || 'Could not load live Supabase checkout pricing.');
+        setPricingError(e.message || 'Could not load live checkout pricing.');
         toast({ title: 'Could not load live pricing', description: e.message || 'Check Supabase checkout tables and policies.' });
       }
     }
@@ -591,7 +591,7 @@ export default function Checkout() {
           {/* MAIN */}
           <div className="lg:col-span-2 card-elevated rounded-3xl p-7 lg:p-9" data-testid="checkout-main">
             {!pricingLoaded && !pricingError && (
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5 text-sm text-slate-600">Loading live Supabase checkout pricing…</div>
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5 text-sm text-slate-600">Loading live checkout pricing…</div>
             )}
             {pricingError && (
               <div className="rounded-2xl border border-red-200 bg-red-50 p-5 text-sm text-red-800">{pricingError}</div>

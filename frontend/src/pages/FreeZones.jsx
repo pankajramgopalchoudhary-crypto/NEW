@@ -56,7 +56,7 @@ export default function FreeZones() {
             <span className="text-xs uppercase tracking-[0.22em] text-slate-600 font-semibold">Free Zone Finder</span>
           </div>
           <h1 className="mt-4 font-display font-semibold text-slate-900 fade-up delay-100" style={{ fontSize: 'clamp(2.4rem, 5vw, 4.6rem)', lineHeight: 1.04 }}>Every UAE<br /><span className="shine-text">free zone, ranked.</span></h1>
-          <p className="mt-3 text-slate-600 max-w-3xl mx-auto fade-up delay-200" style={{ fontSize: 'clamp(0.95rem, 1.1vw, 1.125rem)' }}>Compare cost, visa quota, activity rules and setup speed across all 40+ UAE free zones — live data from Supabase. Includes <b>IFZA</b>, <b>ANCFZ</b>, <b>SHAMS</b>, <b>SPC</b>, <b>RAKEZ</b>, <b>DMCC</b>, <b>Meydan</b>, <b>DAFZA</b> and more.</p>
+          <p className="mt-3 text-slate-600 max-w-3xl mx-auto fade-up delay-200" style={{ fontSize: 'clamp(0.95rem, 1.1vw, 1.125rem)' }}>Compare cost, visa quota, activity rules and setup speed across all 40+ UAE free zones — live prices from our admin-managed catalog. Includes <b>IFZA</b>, <b>ANCFZ</b>, <b>SHAMS</b>, <b>SPC</b>, <b>RAKEZ</b>, <b>DMCC</b>, <b>DIFC</b>, <b>ADGM</b>, <b>Meydan</b>, <b>DAFZA</b> and more.</p>
           {compareTerm && (
             <div className="mt-6 rounded-3xl border border-emerald-200 bg-emerald-50 px-5 py-4 text-sm text-emerald-900 max-w-3xl mx-auto fade-up delay-250">
               Showing comparison results for <span className="font-semibold">{compareTerm}</span>. Use the search box to refine your shortlist.

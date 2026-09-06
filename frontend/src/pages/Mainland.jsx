@@ -212,7 +212,7 @@ export default function Mainland() {
                             </div>
                             <div className="text-right shrink-0">
                               <div className="font-display text-xl font-bold text-slate-900">AED {packagePrice(pkg).toLocaleString()}</div>
-                              <div className="text-[10px] text-slate-500">live Supabase</div>
+                              <div className="text-[10px] text-slate-500">live catalog</div>
                             </div>
                           </div>
                         </button>

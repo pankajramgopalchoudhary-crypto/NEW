@@ -1,0 +1,137 @@
+[
+ {
+  "id": "DED_DUBAI",
+  "slug": "dubai-mainland",
+  "name": "Dubai Mainland (DED)",
+  "fullName": "Dubai Department of Economy and Tourism",
+  "loc": "Dubai",
+  "emirate": "dubai",
+  "licenceTypes": [
+   {
+    "id": "professional",
+    "label": "Professional Licence",
+    "price": 18500,
+    "desc": "For consultants, service providers, professionals"
+   },
+   {
+    "id": "commercial",
+    "label": "Commercial Licence",
+    "price": 28400,
+    "desc": "For trading, import/export, general commerce"
+   },
+   {
+    "id": "industrial",
+    "label": "Industrial Licence",
+    "price": 35000,
+    "desc": "For manufacturing, production activities"
+   }
+  ],
+  "proc": "7–14 days",
+  "acts": "2,000+",
+  "ownership": 100,
+  "corpTax": 9,
+  "govVisa": 12500,
+  "pros": [
+   "Full UAE market access",
+   "Can bid for government contracts",
+   "Local trading to UAE consumers",
+   "No activity restrictions for UAE market",
+   "Can sponsor unlimited visas"
+  ],
+  "cons": [
+   "Local sponsor (51%) required unless regulated profession",
+   "Higher costs vs free zone",
+   "Corporate tax 9% applies"
+  ],
+  "highlight": "Only option for businesses serving UAE consumers directly — restaurants, retail, clinics, construction."
+ },
+ {
+  "id": "DED_AJM",
+  "slug": "ajman-mainland",
+  "name": "Ajman Mainland (DED)",
+  "fullName": "Ajman Department of Economic Development",
+  "loc": "Ajman",
+  "emirate": "ajman",
+  "licenceTypes": [
+   {
+    "id": "professional",
+    "label": "Professional Licence",
+    "price": 8500,
+    "desc": "For service providers and professionals"
+   },
+   {
+    "id": "commercial",
+    "label": "Commercial Licence",
+    "price": 14000,
+    "desc": "For trading and commercial activities"
+   },
+   {
+    "id": "industrial",
+    "label": "Industrial Licence",
+    "price": 18000,
+    "desc": "For manufacturing and production"
+   }
+  ],
+  "proc": "5–10 days",
+  "acts": "1,500+",
+  "ownership": 100,
+  "corpTax": 9,
+  "govVisa": 8000,
+  "pros": [
+   "Most affordable mainland licence in UAE",
+   "Same UAE market access as Dubai DED",
+   "Lower office rent",
+   "Quick processing"
+  ],
+  "cons": [
+   "Ajman address less prestigious than Dubai",
+   "51% local sponsor required",
+   "Lower business volume vs Dubai"
+  ],
+  "highlight": "Best mainland option for cost-conscious businesses needing UAE consumer market access."
+ },
+ {
+  "id": "DED_SHJ",
+  "slug": "sharjah-mainland",
+  "name": "Sharjah Mainland (DED)",
+  "fullName": "Sharjah Economic Development Department",
+  "loc": "Sharjah",
+  "emirate": "sharjah",
+  "licenceTypes": [
+   {
+    "id": "professional",
+    "label": "Professional Licence",
+    "price": 11000,
+    "desc": "For service providers and professionals"
+   },
+   {
+    "id": "commercial",
+    "label": "Commercial Licence",
+    "price": 18000,
+    "desc": "For trading and commercial activities"
+   },
+   {
+    "id": "industrial",
+    "label": "Industrial Licence",
+    "price": 22000,
+    "desc": "For manufacturing and production"
+   }
+  ],
+  "proc": "5–10 days",
+  "acts": "1,500+",
+  "ownership": 100,
+  "corpTax": 9,
+  "govVisa": 9000,
+  "pros": [
+   "Close to Dubai",
+   "More affordable than Dubai DED",
+   "Large industrial areas",
+   "Strong manufacturing base"
+  ],
+  "cons": [
+   "Less prestigious address",
+   "51% local sponsor required"
+  ],
+  "highlight": "Best for manufacturing and industrial businesses near Dubai with lower costs."
+ }
+]

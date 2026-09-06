@@ -1,0 +1,102 @@
+[
+ {
+  "freezone": "IFZA",
+  "package_name": "All UAE License Packages",
+  "duration": "2 Years",
+  "discount_percent": 15,
+  "applies_to": "license_cost_only",
+  "notes": "Does not apply to visa component/add-ons",
+  "source": "user_partner_circular_april_2026",
+  "is_active": "true"
+ },
+ {
+  "freezone": "IFZA",
+  "package_name": "All UAE License Packages",
+  "duration": "3 Years",
+  "discount_percent": 20,
+  "applies_to": "license_cost_only",
+  "notes": "Does not apply to visa component/add-ons",
+  "source": "user_partner_circular_april_2026",
+  "is_active": "true"
+ },
+ {
+  "freezone": "IFZA",
+  "package_name": "All UAE License Packages",
+  "duration": "5 Years",
+  "discount_percent": 30,
+  "applies_to": "license_cost_only",
+  "notes": "Does not apply to visa component/add-ons",
+  "source": "user_partner_circular_april_2026",
+  "is_active": "true"
+ },
+ {
+  "freezone": "SHAMS",
+  "package_name": "Business Setup Packages",
+  "duration": "2 Years",
+  "discount_percent": 15,
+  "applies_to": "package/license_cost",
+  "notes": "Multi-year placeholder based on package architecture; verify exact live offer before publishing",
+  "source": "phase0_architecture",
+  "is_active": "true"
+ },
+ {
+  "freezone": "SHAMS",
+  "package_name": "Business Setup Packages",
+  "duration": "3 Years",
+  "discount_percent": 20,
+  "applies_to": "package/license_cost",
+  "notes": "Multi-year placeholder based on package architecture; verify exact live offer before publishing",
+  "source": "phase0_architecture",
+  "is_active": "true"
+ },
+ {
+  "freezone": "SHAMS",
+  "package_name": "Business Setup Packages",
+  "duration": "5 Years",
+  "discount_percent": 30,
+  "applies_to": "package/license_cost",
+  "notes": "Multi-year placeholder based on package architecture; verify exact live offer before publishing",
+  "source": "phase0_architecture",
+  "is_active": "true"
+ },
+ {
+  "freezone": "DMCC",
+  "package_name": "Jump Start Package",
+  "duration": "Offer",
+  "discount_percent": 10,
+  "applies_to": "package_price",
+  "notes": "Business Acceleration Offer visible on official page",
+  "source": "dmcc_official_business_setup_packages",
+  "is_active": "true"
+ },
+ {
+  "freezone": "DMCC",
+  "package_name": "Prime Plus Package",
+  "duration": "Offer",
+  "discount_percent": 5,
+  "applies_to": "package_price",
+  "notes": "Business Acceleration Offer visible on official page",
+  "source": "dmcc_official_business_setup_packages",
+  "is_active": "true"
+ },
+ {
+  "freezone": "DMCC",
+  "package_name": "Ecosystem Packages",
+  "duration": "Second Year Renewal",
+  "discount_percent": 50,
+  "applies_to": "renewal_fee",
+  "notes": "Official ecosystem package benefit",
+  "source": "dmcc_official_business_setup_packages",
+  "is_active": "true"
+ },
+ {
+  "freezone": "DMCC",
+  "package_name": "Nook Package",
+  "duration": "Third Year Renewal",
+  "discount_percent": 30,
+  "applies_to": "renewal_fee",
+  "notes": "Official Nook package benefit",
+  "source": "dmcc_official_business_setup_packages",
+  "is_active": "true"
+ }
+]

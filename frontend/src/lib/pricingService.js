@@ -1,4 +1,4 @@
-import { supabaseRest } from './supabaseRest';
+import { catalogApi } from './backendApi';
 
 function slugify(value = '') {
   return String(value)
@@ -60,6 +60,7 @@ export function normalizeFreezonePackage(input = {}) {
     duration: first(row, ['duration', 'validity'], `${durationYears} Year${durationYears > 1 ? 's' : ''}`),
     shareholder_count: shareholderCount,
     activities_allowed: activitiesAllowed,
+    pricing_mode: first(row, ['pricing_mode'], 'fixed'),
     workspace: first(row, ['workspace', 'office_type', 'facility'], ''),
     source: first(row, ['source', 'source_status'], ''),
     is_active: bool(first(row, ['is_active', 'active'], true), true),
@@ -117,63 +118,51 @@ export function normalizePackageDiscount(input = {}) {
 }
 
 function bestPackageForZone(packages) {
-  const active = packages.filter((pkg) => pkg.is_active !== false && pkg.base_price > 0);
+  const active = packages.filter((pkg) => pkg.is_active !== false && pkg.base_price > 0 && pkg.pricing_mode !== 'on_request');
   const source = active.length ? active : packages;
   return [...source].sort((a, b) => (a.base_price || a.total_with_service || 0) - (b.base_price || b.total_with_service || 0))[0] || null;
 }
 
-export async function loadFreezonePackages() {
-  const attempts = [
-    () => supabaseRest.select('freezone_packages', '?select=*&is_active=eq.true'),
-    () => supabaseRest.select('freezone_packages', '?select=*'),
-  ];
-
-  let lastError;
-  for (const attempt of attempts) {
-    try {
-      const rows = await attempt();
-      return (rows || [])
-        .map(normalizeFreezonePackage)
-        .filter((pkg) => {
-          if (pkg.is_active === false) return false;
-          if (pkg.source && pkg.source.toLowerCase() === 'renewal') return false;
-          // Hide any package whose name advertises Renewal — keep only New Registration / setup packages
-          const name = String(pkg.package_name || '').toLowerCase();
-          if (/(renewal|renew|all inclusive installment)/.test(name)) return false;
-          return true;
-        });
-    } catch (error) {
-      lastError = error;
-    }
-  }
-  throw lastError || new Error('Could not load freezone_packages');
+/** Quoted-on-request packages always sort last so they never win a "from" price. */
+export function sortPrice(pkg) {
+  return pkg?.pricing_mode === 'on_request' || !(pkg?.base_price > 0)
+    ? Number.MAX_SAFE_INTEGER
+    : pkg.base_price;
 }
 
-async function loadOptionalTable(table, normalizer) {
-  const attempts = [
-    () => supabaseRest.select(table, '?select=*&is_active=eq.true'),
-    () => supabaseRest.select(table, '?select=*'),
-  ];
-  for (const attempt of attempts) {
-    try {
-      const rows = await attempt();
-      return (rows || []).map(normalizer).filter((row) => row.is_active !== false);
-    } catch (error) {
-      // Optional table not present in this Supabase project — try next attempt.
-      if (process.env.NODE_ENV !== 'production') console.debug('[pricingService] optional table attempt failed', error?.message || error);
-    }
-  }
-  return [];
+/** Display string for a package price — handles quote-on-request packages. */
+export function packagePriceLabel(pkg) {
+  if (!pkg) return '—';
+  if (pkg.pricing_mode === 'on_request' || !(pkg.base_price > 0)) return 'Price on request';
+  return `AED ${Number(pkg.base_price).toLocaleString()}`;
+}
+
+export async function loadFreezonePackages() {
+  // Canonical source: Mongo `package_catalog` via GET /api/catalog/packages.
+  const { packages } = await catalogApi.packages();
+  return (packages || [])
+    .map(normalizeFreezonePackage)
+    .filter((pkg) => {
+      if (pkg.is_active === false) return false;
+      if (pkg.source && pkg.source.toLowerCase() === 'renewal') return false;
+      // Hide any package whose name advertises Renewal — keep only New Registration / setup packages
+      const name = String(pkg.package_name || '').toLowerCase();
+      if (/(renewal|renew|all inclusive installment)/.test(name)) return false;
+      return true;
+    });
 }
 
 export async function loadFreezonePricingBundle() {
-  const [packages, benefits, addons, discounts] = await Promise.all([
-    loadFreezonePackages(),
-    loadOptionalTable('package_benefits', normalizePackageBenefit),
-    loadOptionalTable('package_addons', normalizePackageAddon),
-    loadOptionalTable('package_discounts', normalizePackageDiscount),
-  ]);
-  return { packages, benefits, addons, discounts };
+  const data = await catalogApi.all();
+  const packages = (data.packages || [])
+    .map(normalizeFreezonePackage)
+    .filter((pkg) => pkg.is_active !== false && !/(renewal|renew|all inclusive installment)/.test(String(pkg.package_name || '').toLowerCase()));
+  return {
+    packages,
+    benefits: [],
+    addons: (data.package_addons || []).map(normalizePackageAddon),
+    discounts: (data.package_discounts || []).map(normalizePackageDiscount),
+  };
 }
 
 export function getZonePackages(packages = [], zone) {
@@ -185,7 +174,7 @@ export function getZonePackages(packages = [], zone) {
     // Filter for NEW REGISTRATION only, not renewal
     const isNewRegistration = !pkg.source || pkg.source.toLowerCase() !== 'renewal';
     return (pkgSlug === zoneKey || slugify(pkg.freezone_name) === zoneKey || pkgName === String(zone.name || '').toLowerCase()) && isNewRegistration;
-  }).sort((a, b) => (a.base_price || 0) - (b.base_price || 0));
+  }).sort((a, b) => sortPrice(a) - sortPrice(b));
 }
 
 export function getZoneBenefits(benefits = [], zone, packageName = '') {

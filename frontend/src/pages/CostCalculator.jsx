@@ -4,6 +4,7 @@ import Footer from '../components/Footer';
 import { Button } from '../components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { loadCheckoutPricing, getVisaPrice } from '../lib/checkoutSupabase';
+import { catalogApi } from '../lib/backendApi';
 import { Calculator, Sparkles, CheckCircle2, ChevronRight, Phone, Tag, Building2, Calendar, BadgePercent } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
@@ -74,19 +75,12 @@ export default function CostCalculator() {
         setPricingError('');
       })
       .catch((error) => {
-        if (!cancelled) setPricingError(error.message || 'Live pricing could not be loaded from Supabase.');
+        if (!cancelled) setPricingError(error.message || 'Live pricing could not be loaded.');
       });
-    // Also load multi-year discounts directly from Supabase
-    const supaUrl = process.env.REACT_APP_SUPABASE_URL;
-    const supaKey = process.env.REACT_APP_SUPABASE_ANON_KEY;
-    if (supaUrl && supaKey) {
-      fetch(`${supaUrl}/rest/v1/package_discounts?select=*&is_active=eq.true&limit=200`, {
-        headers: { apikey: supaKey, Authorization: `Bearer ${supaKey}` },
-      })
-        .then((r) => (r.ok ? r.json() : []))
-        .then((rows) => { if (!cancelled) setPackageDiscounts(rows || []); })
-        .catch((err) => { if (!cancelled) console.warn('[calc] package discounts load failed', err); });
-    }
+    // Multi-year discounts come from the canonical catalog (Mongo), not the client.
+    catalogApi.all()
+      .then((data) => { if (!cancelled) setPackageDiscounts(data.package_discounts || []); })
+      .catch((err) => { if (!cancelled) console.warn('[calc] package discounts load failed', err); });
     return () => { cancelled = true; };
   }, []);
 

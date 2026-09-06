@@ -1,0 +1,93 @@
+[
+ {
+  "id": "SAIF",
+  "name": "SAIF Zone",
+  "loc": "Sharjah",
+  "emirate": "sharjah",
+  "status": "PRICING_AUDIT"
+ },
+ {
+  "id": "HFZA",
+  "name": "Hamriyah Free Zone",
+  "loc": "Sharjah",
+  "emirate": "sharjah",
+  "status": "PRICING_AUDIT"
+ },
+ {
+  "id": "CREATIVE_CITY",
+  "name": "Creative City",
+  "loc": "Fujairah",
+  "emirate": "fujairah",
+  "status": "COMING_SOON"
+ },
+ {
+  "id": "DUBAI_SOUTH",
+  "name": "Dubai South",
+  "loc": "Dubai",
+  "emirate": "dubai",
+  "status": "COMING_SOON"
+ },
+ {
+  "id": "DTEC",
+  "name": "DTEC",
+  "loc": "Dubai Silicon Oasis",
+  "emirate": "dubai",
+  "status": "COMING_SOON"
+ },
+ {
+  "id": "DWTC",
+  "name": "DWTC Free Zone",
+  "loc": "Dubai",
+  "emirate": "dubai",
+  "status": "COMING_SOON"
+ },
+ {
+  "id": "SRTIP",
+  "name": "SRTIP",
+  "loc": "Sharjah",
+  "emirate": "sharjah",
+  "status": "COMING_SOON"
+ },
+ {
+  "id": "UAQ_FTZ",
+  "name": "UAQ Free Trade Zone",
+  "loc": "Umm Al Quwain",
+  "emirate": "uaq",
+  "status": "PRICING_AUDIT"
+ },
+ {
+  "id": "AJMAN_FZ",
+  "name": "Ajman Free Zone",
+  "loc": "Ajman",
+  "emirate": "ajman",
+  "status": "PRICING_AUDIT"
+ },
+ {
+  "id": "DED_AUH",
+  "name": "Abu Dhabi Mainland (DED)",
+  "loc": "Abu Dhabi",
+  "emirate": "abudhabi",
+  "status": "COMING_SOON"
+ },
+ {
+  "id": "DED_FUJ",
+  "name": "Fujairah Mainland (DED)",
+  "loc": "Fujairah",
+  "emirate": "fujairah",
+  "status": "COMING_SOON"
+ },
+ {
+  "id": "DED_RAK",
+  "name": "RAK Mainland (DED)",
+  "loc": "Ras Al Khaimah",
+  "emirate": "rak",
+  "status": "COMING_SOON"
+ },
+ {
+  "id": "DED_UAQ",
+  "name": "UAQ Mainland (DED)",
+  "loc": "Umm Al Quwain",
+  "emirate": "uaq",
+  "status": "COMING_SOON"
+ }
+]

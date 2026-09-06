@@ -11,11 +11,6 @@
       "static/chunks/main-app.js",
       "static/chunks/app/admin/layout.js"
     ],
-    "/admin/pricing/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/admin/pricing/page.js"
-    ],
     "/admin/login/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
@@ -31,15 +26,15 @@
       "static/chunks/main-app.js",
       "static/chunks/app/admin/dashboard/page.js"
     ],
-    "/admin/tickets/page": [
+    "/admin/email-health/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
-      "static/chunks/app/admin/tickets/page.js"
+      "static/chunks/app/admin/email-health/page.js"
     ],
-    "/admin/documents/page": [
+    "/admin/catalog/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
-      "static/chunks/app/admin/documents/page.js"
+      "static/chunks/app/admin/catalog/page.js"
     ]
   }
 }

@@ -28,6 +28,12 @@ from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel, EmailStr, Field
 
 from services_catalog import get_service
+from catalog import (find_package, find_package_by_name, find_addon,
+                     package_price as catalog_package_price)
+
+FOUNDERS_SLUG = "founders-club-lifetime"
+FOUNDER_SERVICE_DISCOUNT_PCT = 15.0   # tax / audit / bookkeeping catalog services
+FOUNDER_PACKAGE_DISCOUNT_PCT = 10.0   # company setup packages
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/orders", tags=["orders"])
@@ -146,60 +152,94 @@ async def _price_service(item: OrderItemIn) -> Dict[str, Any]:
 
 
 async def _price_package(item: OrderItemIn) -> Dict[str, Any]:
-    rows: List[Dict[str, Any]] = []
+    row = None
     if item.package_id:
-        rows = await _sb_get("freezone_packages", {"id": f"eq.{item.package_id}", "select": "*"})
-    if not rows and item.package_name and item.freezone:
-        rows = await _sb_get("freezone_packages", {
-            "freezone": f"eq.{item.freezone}",
-            "package_name": f"eq.{item.package_name}",
-            "select": "*", "limit": "1",
-        })
-    if not rows:
+        row = await find_package(item.package_id)
+    if not row and item.package_name and item.freezone:
+        row = await find_package_by_name(item.freezone, item.package_name)
+    if not row:
         raise HTTPException(400, "Unknown package — refresh the page and pick the package again")
-    row = rows[0]
     if row.get("is_active") is False:
         raise HTTPException(400, "Package is no longer available")
-    unit = _first_price(row, PACKAGE_PRICE_KEYS) + _money(row.get("service_fee"), 0.0)
+    if row.get("pricing_mode") == "on_request":
+        raise HTTPException(
+            400,
+            f"{row.get('freezone')} — {row.get('package_name')} is quoted on request. "
+            "Please submit an enquiry and an advisor will send you a fixed quote.",
+        )
+    unit = catalog_package_price(row)
     if unit <= 0:
         raise HTTPException(400, "Package has no valid price")
     return {
         "kind": "package",
-        "ref": str(row.get("id")),
+        "ref": str(row.get("_id")),
         "name": f"{row.get('freezone') or 'Free Zone'} — {row.get('package_name') or 'Business Setup Package'}",
         "billing": "one-time",
         "price_label": f"AED {unit:,.0f}",
         "unit_price_aed": unit,
         "qty": 1,
         "line_total_aed": round(unit, 2),
-        "source": "supabase:freezone_packages",
+        "supabase_package_id": row.get("supabase_id"),
+        "source": "mongo:package_catalog",
     }
 
 
 async def _price_addon(item: OrderItemIn) -> Dict[str, Any]:
     if not (item.addon_id or item.addon_name):
         raise HTTPException(400, "addon item requires an addon_id or addon_name")
-    for table in ("service_addons", "package_addons"):
-        params = ({"id": f"eq.{item.addon_id}", "select": "*"} if item.addon_id
-                  else {"addon_name": f"eq.{item.addon_name}", "select": "*", "limit": "1"})
-        rows = await _sb_get(table, params)
-        if rows:
-            row = rows[0]
-            if row.get("is_active") is False:
-                raise HTTPException(400, "Add-on is no longer available")
-            unit = _first_price(row, ADDON_PRICE_KEYS)
-            return {
-                "kind": "addon",
-                "ref": str(row.get("id")),
-                "name": row.get("addon_name") or row.get("name") or "Add-on",
-                "billing": row.get("unit") or "one-time",
-                "price_label": f"AED {unit:,.0f}",
-                "unit_price_aed": unit,
-                "qty": item.qty,
-                "line_total_aed": round(unit * item.qty, 2),
-                "source": f"supabase:{table}",
-            }
-    raise HTTPException(400, f"Unknown add-on: {item.addon_id or item.addon_name}")
+    row = await find_addon(item.addon_id or "", item.addon_name)
+    if not row:
+        raise HTTPException(400, f"Unknown add-on: {item.addon_id or item.addon_name}")
+    if row.get("is_active") is False:
+        raise HTTPException(400, "Add-on is no longer available")
+    unit = _money(row.get("price"))
+    return {
+        "kind": "addon",
+        "ref": str(row.get("_id")),
+        "name": row.get("label") or row.get("addon_name") or "Add-on",
+        "billing": row.get("unit") or "one-time",
+        "price_label": f"AED {unit:,.0f}",
+        "unit_price_aed": unit,
+        "qty": item.qty,
+        "line_total_aed": round(unit * item.qty, 2),
+        "source": "mongo:addon_catalog",
+    }
+
+
+async def is_founder_member(email: str, user_id: Optional[str] = None) -> bool:
+    """Active Founder Club member? Fulfilled orders are the source of truth,
+    with the Supabase membership table as a secondary check."""
+    email = (email or "").lower().strip()
+    if email and await _db["order_fulfilments"].find_one({"customer_email": email, "founders_club": True}):
+        return True
+    if user_id:
+        rows = await _sb_get("founder_club_memberships",
+                             {"user_id": f"eq.{user_id}", "status": "eq.active", "select": "id", "limit": "1"})
+        return bool(rows)
+    return False
+
+
+def _apply_founder_discount(line_items: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """15% off catalog services, 10% off setup packages. Never discounts the
+    Founder Club membership itself."""
+    amount = 0.0
+    for li in line_items:
+        if li["kind"] == "service" and li["ref"] != FOUNDERS_SLUG:
+            pct = FOUNDER_SERVICE_DISCOUNT_PCT
+        elif li["kind"] == "package":
+            pct = FOUNDER_PACKAGE_DISCOUNT_PCT
+        else:
+            continue
+        saving = round(li["line_total_aed"] * pct / 100.0, 2)
+        li["founder_discount_pct"] = pct
+        li["founder_discount_aed"] = saving
+        amount += saving
+    return {
+        "member": True,
+        "amount_aed": round(amount, 2),
+        "service_pct": FOUNDER_SERVICE_DISCOUNT_PCT,
+        "package_pct": FOUNDER_PACKAGE_DISCOUNT_PCT,
+    }
 
 
 async def _coupon_discount(code: str, subtotal: float) -> Dict[str, Any]:
@@ -238,11 +278,15 @@ async def create_order(payload: OrderIn):
     addons_total = round(sum(li["line_total_aed"] for li in line_items if li["kind"] == "addon"), 2)
     subtotal = round(base_price + addons_total, 2)
 
+    founder = {"member": False, "amount_aed": 0.0}
+    if await is_founder_member(str(payload.contact.email), payload.user_id):
+        founder = _apply_founder_discount(line_items)
+
     coupon = None
-    discount_total = 0.0
+    discount_total = founder["amount_aed"]
     if payload.coupon_code:
-        coupon = await _coupon_discount(payload.coupon_code, subtotal)
-        discount_total = coupon["amount_aed"]
+        coupon = await _coupon_discount(payload.coupon_code, subtotal - discount_total)
+        discount_total = round(discount_total + coupon["amount_aed"], 2)
 
     final_total = round(max(subtotal - discount_total, 0.0), 2)
     if final_total <= 0 or final_total > MAX_ORDER_AED:
@@ -260,7 +304,8 @@ async def create_order(payload: OrderIn):
         f"Server-priced ({len(line_items)} line items)",
         f"Activity: {payload.business.get('activity')}" if payload.business.get("activity") else None,
         f"Office: {payload.office_type}" if payload.office_type else None,
-        f"Coupon: {coupon['code']} (-AED {discount_total:,.0f})" if coupon and coupon["applied"] else None,
+        f"Coupon: {coupon['code']} (-AED {coupon['amount_aed']:,.0f})" if coupon and coupon["applied"] else None,
+        f"Founder Club discount: -AED {founder['amount_aed']:,.0f}" if founder["member"] and founder["amount_aed"] else None,
         f"User: {payload.user_id}" if payload.user_id else None,
     ]))
 
@@ -319,6 +364,7 @@ async def create_order(payload: OrderIn):
         "final_total": final_total,
         "currency": "AED",
         "coupon": coupon,
+        "founder_discount": founder,
         "business": payload.business,
         "created_at": _now(),
     })
@@ -330,6 +376,19 @@ async def create_order(payload: OrderIn):
         **{k: v for k, v in order_row.items() if k not in ("id", "order_ref")},
         "line_items": line_items,
         "coupon": coupon,
+        "founder_discount": founder,
+    }
+
+
+@router.get("/founder-status")
+async def founder_status(email: str):
+    """Lets the storefront show member pricing before an order is created."""
+    member = await is_founder_member(email)
+    return {
+        "email": email.lower().strip(),
+        "member": member,
+        "service_pct": FOUNDER_SERVICE_DISCOUNT_PCT if member else 0,
+        "package_pct": FOUNDER_PACKAGE_DISCOUNT_PCT if member else 0,
     }
 
 

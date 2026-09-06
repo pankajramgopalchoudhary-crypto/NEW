@@ -781,6 +781,9 @@ video {
 .ml-1 {
   margin-left: 0.25rem;
 }
+.ml-2 {
+  margin-left: 0.5rem;
+}
 .ml-5 {
   margin-left: 1.25rem;
 }
@@ -1069,6 +1072,9 @@ video {
 }
 .min-w-\[200px\] {
   min-width: 200px;
+}
+.min-w-\[240px\] {
+  min-width: 240px;
 }
 .min-w-\[8rem\] {
   min-width: 8rem;
