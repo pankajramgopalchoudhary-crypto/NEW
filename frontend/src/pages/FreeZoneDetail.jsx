@@ -6,6 +6,8 @@ import LeadBox from '../components/LeadBox';
 import PageFAQ from '../components/PageFAQ';
 import { Button } from '../components/ui/button';
 import { getZoneBySlug, ZONES, ADD_ONS } from '../data/zones';
+import { useAuth } from '../context/AuthContext';
+import { ordersApi } from '../lib/backendApi';
 import { loadFreezonePricingBundle, mergeZoneWithLivePackage, mergeZonesWithLivePackages, getZonePackages, getZoneBenefits, getZoneAddons, getZoneDiscounts, sortPrice, packagePriceLabel } from '../lib/pricingService';
 import { ChevronRight, MapPin, Clock, Users2, ShieldCheck, CheckCircle2, XCircle, Building2, Sparkles, ArrowRight, Globe, ArrowUpRight } from 'lucide-react';
 
@@ -41,6 +43,7 @@ export default function FreeZoneDetail() {
   const [withVisa, setWithVisa] = useState(false);
   const [pricingBundle, setPricingBundle] = useState({ packages: [], benefits: [], addons: [], discounts: [] });
   const [selectedPackageId, setSelectedPackageId] = useState('');
+  const [founder, setFounder] = useState({ member: false, package_pct: 0 });
   const livePackages = pricingBundle.packages;
   const zone = mergeZoneWithLivePackage(baseZone, livePackages);
   const zonePackages = getZonePackages(pricingBundle.packages, zone);
@@ -79,6 +82,12 @@ export default function FreeZoneDetail() {
 
   useEffect(() => { window.scrollTo(0, 0); }, [slug]);
 
+  const { user } = useAuth();
+  useEffect(() => {
+    if (!user?.email) return;
+    ordersApi.founderStatus(user.email).then(setFounder).catch(() => {});
+  }, [user?.email]);
+
   if (!zone) {
     return (
       <div>
@@ -106,6 +115,10 @@ export default function FreeZoneDetail() {
   const selectedGovernmentTotal = Number(selectedPackage?.base_price || selectedPackage?.total_with_service || 0);
   const selectedServiceFee = Number(selectedPackage?.service_fee || 0);
   const total = selectedGovernmentTotal + selectedServiceFee;
+  const memberSaving = founder.member && founder.package_pct > 0
+    ? Math.round((total * founder.package_pct) / 100)
+    : 0;
+  const payableTotal = total - memberSaving;
   const ctaLabel = 'Reserve your slot';
   const reserveSlot = () => {
     const pkgId = selectedPackage?.package_id || selectedPackage?.id || '';
@@ -292,9 +305,21 @@ export default function FreeZoneDetail() {
             <div className="grid md:grid-cols-2 gap-8 items-center">
               <div>
                 <div className="text-[10px] uppercase tracking-[0.22em] font-semibold brand-emerald">Selected total</div>
-                <div className="font-display text-6xl font-bold text-slate-900 mt-1">AED {total.toLocaleString()}</div>
+                {memberSaving > 0 ? (
+                  <>
+                    <div className="font-display text-6xl font-bold text-slate-900 mt-1" data-testid="fz-total">AED {payableTotal.toLocaleString()}</div>
+                    <div className="mt-1 flex items-center gap-2 text-sm">
+                      <span className="text-slate-400 line-through">AED {total.toLocaleString()}</span>
+                      <span className="font-semibold brand-emerald" data-testid="fz-founder-saving">
+                        Founder Club — save AED {memberSaving.toLocaleString()} ({founder.package_pct}%)
+                      </span>
+                    </div>
+                  </>
+                ) : (
+                  <div className="font-display text-6xl font-bold text-slate-900 mt-1" data-testid="fz-total">AED {total.toLocaleString()}</div>
+                )}
                 <div className="text-sm text-slate-500 mt-1">{selectedPackage?.package_name || zone.name} · Year 1</div>
-                <Button data-testid="fz-reserve-btn" onClick={reserveSlot} className="btn-primary rounded-full mt-6 px-6 h-11">{ctaLabel} · AED {total.toLocaleString()}</Button>
+                <Button data-testid="fz-reserve-btn" onClick={reserveSlot} className="btn-primary rounded-full mt-6 px-6 h-11">{ctaLabel} · AED {payableTotal.toLocaleString()}</Button>
               </div>
               <div className="space-y-3">
                 {[
@@ -313,7 +338,7 @@ export default function FreeZoneDetail() {
                 ))}
                 <div className="flex items-center justify-between pt-2">
                   <div className="font-semibold text-slate-900">Total</div>
-                  <div className="font-display text-2xl font-bold brand-emerald">AED {total.toLocaleString()}</div>
+                  <div className="font-display text-2xl font-bold brand-emerald">AED {payableTotal.toLocaleString()}</div>
                 </div>
               </div>
             </div>

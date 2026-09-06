@@ -6,6 +6,7 @@ import { Input } from '../components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { ordersApi } from '../lib/backendApi';
 import { useToast } from '../hooks/use-toast';
 import { COMPANY_INFO } from '../data/zones';
 import { createCheckoutOrder, loadCheckoutPricing, markBankTransferSubmitted, getPrebookingAmount, getVisaPrice, getDefaultServiceFee } from '../lib/checkoutSupabase';
@@ -61,6 +62,12 @@ export default function Checkout() {
   const location = useLocation();
   const [params] = useSearchParams();
   const { user } = useAuth();
+  const [founder, setFounder] = useState({ member: false, package_pct: 0 });
+
+  useEffect(() => {
+    if (!user?.email) return;
+    ordersApi.founderStatus(user.email).then(setFounder).catch(() => {});
+  }, [user?.email]);
   const { toast } = useToast();
   const [availableZones, setAvailableZones] = useState([]);
   const [availableAddons, setAvailableAddons] = useState([]);
@@ -279,18 +286,26 @@ export default function Checkout() {
         : []),
       { l: 'SmartSetupUAE service & advisory', v: serviceFeeAfterDiscount, original: originalServiceFee, type: 'service' },
     ];
+    // Founder Club members get 10% off the setup package (mirrors POST /api/orders).
+    if (founder.member && founder.package_pct > 0) {
+      const packageLine = items.find((x) => x.type === 'zone')?.v || 0;
+      const saving = Math.round((packageLine * founder.package_pct) / 100);
+      if (saving > 0) {
+        items.push({ l: `Founder Club member discount (${founder.package_pct}%)`, v: -saving, type: 'founder' });
+      }
+    }
     const total = items.reduce((s, x) => s + x.v, 0);
 
     // Savings: pre-discount total (original service fee + no package discount) vs current
     const grossTotal = items.reduce((s, x) => {
-      if (x.type === 'discount') return s; // exclude negative line
+      if (x.type === 'discount' || x.type === 'founder') return s; // exclude negative lines
       if (x.type === 'service') return s + (x.original || x.v);
       return s + x.v;
     }, 0);
     const totalSaved = Math.max(0, grossTotal - total);
     const savedPct = grossTotal > 0 ? Math.round((totalSaved / grossTotal) * 100) : 0;
     return { items, total, grossTotal, totalSaved, savedPct };
-  }, [draft, currentZone, packageDiscount, selectedCoupon, serviceFeeAfterDiscount, originalServiceFee, nameReservation]);
+  }, [draft, currentZone, packageDiscount, selectedCoupon, serviceFeeAfterDiscount, originalServiceFee, nameReservation, founder]);
 
   const payAmount = payChoice === 'full' ? breakdown.total : getPrebookingAmount();
 

@@ -44,6 +44,17 @@ package_discounts = _db["package_discount_catalog"]
 PRICE_KEYS = ["offer_price", "package_price", "display_price", "promotion_price",
               "discount_price", "base_price", "original_price", "price"]
 
+# ---- Data-quality rules (applied on every startup, idempotent) --------------
+# Partner/co-working listings that are not licence packages. They were dragging
+# the free zone's "from" price down to AED 1,925 / AED 0.
+PACKAGE_EXCLUSIONS = [
+    {"freezone": "DMCC", "package_name": "AstroLabs Package"},
+    {"freezone": "DMCC", "package_name": "Uptown Homeowners Package"},
+]
+# Free zones we only sell for a single licence term. Anything longer is hidden
+# so the displayed range stays "cheapest 1-year → most expensive 1-year".
+DURATION_ALLOWLIST = {"DMCC": {"1 Year"}}
+
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -169,6 +180,36 @@ async def _import_supabase_packages() -> int:
     return imported
 
 
+async def _apply_data_quality() -> Dict[str, int]:
+    """Idempotent clean-up so imported rows can't distort displayed prices."""
+    stats = {"excluded": 0, "duration_hidden": 0, "on_request": 0}
+
+    for rule in PACKAGE_EXCLUSIONS:
+        res = await packages.update_many(
+            {**rule, "is_active": True},
+            {"$set": {"is_active": False, "excluded_reason": "not a licence package",
+                      "updated_at": _now()}},
+        )
+        stats["excluded"] += res.modified_count
+
+    for freezone, allowed in DURATION_ALLOWLIST.items():
+        res = await packages.update_many(
+            {"freezone": freezone, "duration": {"$nin": list(allowed)}, "is_active": True},
+            {"$set": {"is_active": False, "excluded_reason": "term not sold",
+                      "updated_at": _now()}},
+        )
+        stats["duration_hidden"] += res.modified_count
+
+    # A package with no price is quoted on request — it must never render AED 0.
+    res = await packages.update_many(
+        {"$or": [{"package_price": {"$lte": 0}}, {"package_price": None}],
+         "pricing_mode": {"$ne": "on_request"}},
+        {"$set": {"pricing_mode": "on_request", "updated_at": _now()}},
+    )
+    stats["on_request"] += res.modified_count
+    return stats
+
+
 async def ensure_defaults() -> None:
     counts = {
         "jurisdictions": await _seed_collection(
@@ -199,6 +240,7 @@ async def ensure_defaults() -> None:
                                        {"$set": {"slug": _slugify(doc.get("name"))}})
     await jurisdictions.create_index("slug")
     await packages.create_index([("freezone", 1), ("package_name", 1)])
+    counts["data_quality"] = await _apply_data_quality()
     logger.info("[catalog] seeded %s", {k: v for k, v in counts.items() if v})
 
 

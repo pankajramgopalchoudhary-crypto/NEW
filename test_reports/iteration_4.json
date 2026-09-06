@@ -1,0 +1,46 @@
+{
+  "summary": "Iteration 4 review — the DMCC pricing bug is FIXED and the member-pricing consistency work verified end-to-end. Backend: /api/catalog/packages?freezone=DMCC returns exactly 12 active packages, all duration='1 Year', cheapest = 'Nook Package' AED 10,345, most expensive = 'Jump Start Package' AED 43,780 (package_price). AstroLabs (1,925) and 'Uptown Homeowners' (0) are gone; no 2-Year or 3-Year DMCC rows. Total active packages across all zones = 118 (was 126) and every other zone's count is unchanged (IFZA=8, ANCFZ=29, SHAMS=28, DIFC=4, ADGM=5, Meydan=12, DAFZA=9, ...). Idempotency confirmed: first backend startup after E1's data-quality change logged [catalog] seeded {'data_quality': {'excluded': 2, 'duration_hidden': 6, 'on_request': 0}}, and 5+ subsequent restarts log excluded/duration_hidden/on_request all 0. Founder discount math: GET /api/orders/founder-status?email=pankajdxb555@gmail.com => {member:true, service_pct:15, package_pct:10}; random TEST_*@example.com => {member:false, service_pct:0, package_pct:0}. POST /api/orders as pankaj: bookkeeping AED 1200 → final 1020 (15% off), DMCC Nook 10,345 → final 9310.50 (exact), founders-club-lifetime AED 999 → final 999 (never discounted). DIFC still 'From AED 16,900' and ADGM 'From AED 7,350'; DFSA/FSRA Category A packages still trigger 400 on POST /api/orders. Frontend: /free-zones DMCC card shows FROM AED 10,345 (no 1,925 anywhere). /free-zones/dmcc detail page shows 12 packages, Nook AED 10,345 selected total, no AED 0/NaN/AstroLabs/Uptown/2-Year/3-Year text. Member view (login client@smartsetupuae.ae): fz-total='AED 9,310', fz-founder-saving='Founder Club — save AED 1,035 (10%)', struck-through AED 10,345, Reserve button='Reserve your slot · AED 9,310' — matches exactly what POST /api/orders charges. Non-member view (logged out) shows plain AED 10,345 with no discount line. /checkout as member: 'Founder Club member discount (10%) - AED 489' negative line item present, summary-saved-amount='AED 1,989 (31%)' (stacks with the FIRST500 service-fee waiver), Total AED 4,399 = 4,888 - 0 - 489. Mobile 390x844 /free-zones/dmcc: 0px horizontal overflow, correct prices. Pytest: 44/44 passing across 4 files (test_iteration4_dmcc_and_founder.py [17 new], test_iteration3_review.py [17 updated], test_orders_and_catalog.py [10], test_internal_notes.py [2 previously erroring due to sys.path — fixed with a conftest.py]).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/catalog/packages?freezone=DMCC&include_inactive=true", "issue": "Query param has no effect — response is identical to without it (12 rows either way). The 8 excluded/duration-hidden DMCC rows are truly removed from the response instead of being returned with is_active=false. Not a bug per se (user only cares that they don't show), but the admin catalog page will not be able to display them as 'Off' rows if it relies on this endpoint alone — needs verification whether the admin uses a different backing endpoint (e.g. /api/admin/catalog/packages)."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "/accounting hero + /founder-club hero", "issues": ["Pre-existing white-on-pale gradient heading contrast — flagged in iterations 2 & 3, per session note NOT re-reported."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration4_dmcc_and_founder.py",
+    "/app/backend/tests/test_iteration3_review.py",
+    "/app/backend/tests/test_orders_and_catalog.py",
+    "/app/backend/tests/test_internal_notes.py",
+    "/app/backend/tests/conftest.py",
+    "/app/test_reports/pytest/iteration4.xml"
+  ],
+  "action_items": [
+    "(verify only) Confirm admin /admin/catalog Price Catalog still lists the deactivated DMCC rows as 'Off' — the public /api/catalog/packages endpoint no longer returns them even with include_inactive=true. If admin depends on the public endpoint, add ?include_inactive=true honouring in catalog.py list_packages()."
+  ],
+  "critical_code_review_comments": [
+    "catalog.py PACKAGE_EXCLUSIONS + DURATION_ALLOWLIST + _apply_data_quality() are correctly idempotent — second-run seed log is {excluded:0, duration_hidden:0, on_request:0} exactly as spec.",
+    "orders.py _apply_founder_discount() math is spot-on: 15% services / 10% packages, membership never discounted; server value matches UI to the fils.",
+    "FreeZoneDetail.jsx correctly hides the AED 0 svc line by showing 'Included' instead — iteration 3 minor issue resolved.",
+    "Checkout.jsx founder line item correctly excluded from grossTotal so the 'You saved' block adds up (AED 1,989 = FIRST500 waiver 1,500 + founder 489).",
+    "Non-member UI shows original price and no discount line — no confusing 'AED 0 saving' block."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration4_dmcc_and_founder.py (new — 17 tests: DMCC 12/1-year, Nook 10,345, Jump Start 43,780, no AstroLabs/Uptown, total 118, per-zone counts, founder-status member/non-member, order math bookkeeping/nook/founders-club-lifetime, DIFC/ADGM from prices, DFSA on_request 400 rejection)",
+    "/app/backend/tests/conftest.py (new — puts /app/backend on sys.path so test_internal_notes.py can `import support`; the 2 tests were erroring in iteration 3 too but weren't caught)",
+    "/app/backend/tests/test_iteration3_review.py (updated one assertion: total packages 120→118 to reflect the 8 legitimate DMCC exclusions — flagged in the review request as an allowed change)"
+  ],
+  "success_rate": {"backend": "100% (44/44 pytest across 4 files)", "frontend": "100% (customer DMCC card / detail / member checkout / mobile all verified)"},
+  "test_credentials": "Used /app/memory/test_credentials.md — client@smartsetupuae.ae/Client@2026 (Supabase member) for the member UI test; pankajdxb555@gmail.com for the founder-status/order API tests; fresh TEST_*@example.com for the non-member API test.",
+  "seed_data_creation": "3 TEST_* orders created via POST /api/orders (member bookkeeping, member Nook package, member founders-club-lifetime) plus 1 non-member founder-status hit. All identifiable via TEST_ prefix or pankaj email + TEST label in contact.name.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "conftest.py is now at /app/backend/tests/ so pytest can import backend modules directly — do not remove it. When testing member UI on /free-zones/{slug} or /checkout, log in via [data-testid=auth-email-input]/[auth-password-input]/[auth-submit-btn] with client@smartsetupuae.ae/Client@2026 (this user is a Founder Club MEMBER). data-testids in play: fz-total, fz-founder-saving, fz-reserve-btn, summary-saved-amount. POST /api/orders response uses `final_total` (not `total`). DMCC public endpoint returns only 12 rows even with include_inactive=true — the 8 excluded rows are filtered server-side; if you need to see them use an admin endpoint. Stripe monthly subs still NOT built — do not test.",
+  "rca of the issue": "Reported bug 'PRICE OF DMCC IS WRONG': DMCC's 'FROM AED 1,925' came from an AstroLabs partner co-working listing that had been imported into the packages collection, and an 'Uptown Homeowners Package' at AED 0 was also present, along with 2-Year and 3-Year term duplicates. Fix (E1): added PACKAGE_EXCLUSIONS ({DMCC: [AstroLabs Package, Uptown Homeowners Package]}) and DURATION_ALLOWLIST ({DMCC: {'1 Year'}}) plus a _apply_data_quality() run at the end of ensure_defaults() that deactivates or filters those rows and force-flips any surviving zero-price row to pricing_mode='on_request'. Verified end-to-end: /free-zones DMCC card = AED 10,345 (was 1,925), /free-zones/dmcc detail shows 12 one-year packages ranging Nook 10,345 → Jump Start 43,780 (offer 39,402), no AED 0 / AED 1,925 / AED NaN / AstroLabs / Uptown / 2-Year / 3-Year anywhere. Idempotent on restart (subsequent seeds log excluded/duration_hidden/on_request = 0). Total active packages = 118 (126 − 8 DMCC exclusions), other zones unchanged."
+}

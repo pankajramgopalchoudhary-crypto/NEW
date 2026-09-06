@@ -18,7 +18,8 @@ class TestCatalog:
         assert len(d["jurisdictions"]) == 12, f"jur={len(d['jurisdictions'])}"
         assert len(d["mainland"]) == 3
         assert len(d["coming_soon"]) == 13
-        assert len(d["packages"]) >= 120
+        # Updated iter4: DMCC dropped 8 rows (AstroLabs, Uptown Homeowners, multi-year) => 126→118
+        assert len(d["packages"]) >= 118
         assert len(d["addons"]) == 17
         assert "package_addons" in d and "package_discounts" in d
 
