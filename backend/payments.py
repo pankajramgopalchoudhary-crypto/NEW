@@ -21,7 +21,7 @@ MONGO_URL = os.environ.get("MONGO_URL", "mongodb://localhost:27017")
 DB_NAME = os.environ.get("DB_NAME", "smartsetupuae")
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
 SUPABASE_SERVICE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
-STRIPE_API_KEY = os.environ.get("STRIPE_API_KEY", "sk_test_emergent")
+STRIPE_API_KEY = os.environ["STRIPE_API_KEY"]
 EXCHANGE_RATE_API = os.environ.get("EXCHANGE_RATE_API", "https://open.er-api.com/v6/latest/AED")
 
 _mongo = AsyncIOMotorClient(MONGO_URL)
@@ -181,6 +181,13 @@ async def checkout_status(session_id: str, request: Request):
                     logger.warning("supabase order update failed: %s", e)
         # Fire order-placed notification (email + WhatsApp) on payment success
         if status_obj.payment_status == "paid":
+            # Fulfilment: portal account + Founder Club membership + welcome email
+            try:
+                from fulfillment import fulfill_order
+                await fulfill_order(existing.get("order_ref") or "",
+                                    existing.get("customer_email") or "")
+            except Exception as e:
+                logger.warning("order fulfilment failed: %s", e)
             try:
                 import notify_triggers as nt
                 await nt.notify_order_placed(

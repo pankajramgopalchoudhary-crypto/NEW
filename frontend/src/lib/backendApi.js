@@ -74,6 +74,18 @@ export const paymentsApi = {
   status: (session_id) => api.get(`/api/payments/checkout/status/${session_id}`, { auth: false }),
 };
 
+// Canonical standalone service catalog (Mongo `service_catalog`, admin-editable).
+export const servicesApi = {
+  list: (category) => api.get(`/api/services${category ? `?category=${encodeURIComponent(category)}` : ''}`, { auth: false }),
+  one: (slug) => api.get(`/api/services/${slug}`, { auth: false }),
+};
+
+// Server-priced orders — the browser never sends amounts.
+export const ordersApi = {
+  create: (payload) => api.post('/api/orders', payload, { auth: false }),
+  get: (id) => api.get(`/api/orders/${id}`, { auth: false }),
+};
+
 export const adminApi = {
   stats: () => api.get('/api/admin/dashboard/stats'),
   seedDummy: () => api.post('/api/admin/seed/dummy', {}),

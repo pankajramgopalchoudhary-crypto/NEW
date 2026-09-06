@@ -30,6 +30,7 @@ const NAV = [
     { href: '/admin/packages', label: 'Packages & Visas', icon: PackageIcon, perm: 'packages', roles: ['founder'] },
     { href: '/admin/coupons', label: 'Coupons', icon: Ticket, perm: 'coupons' },
     { href: '/admin/founders-club', label: 'Founders Club', icon: Crown, perm: 'founders-club' },
+    { href: '/admin/services', label: 'Service Catalog', icon: Tag, perm: 'services', roles: ['founder', 'manager'] },
     { href: '/admin/jurisdictions', label: 'Jurisdictions', icon: Map, perm: 'jurisdictions', roles: ['founder'] },
   ]},
   { group: 'System', items: [

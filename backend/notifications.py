@@ -47,6 +47,11 @@ class EmailPayload(BaseModel):
 
 
 def _sender_for(alias: Optional[str]) -> str:
+    # Until every alias domain is verified in Resend, an env override keeps
+    # sends working from a single verified sender.
+    forced = os.environ.get("RESEND_FORCE_FROM", "")
+    if forced:
+        return forced
     if alias and alias in ALLOWED_ALIASES:
         # Prefer the branded form: `SmartSetupUAE <alias@…>`
         return f"SmartSetupUAE <{ALLOWED_ALIASES[alias]}>"

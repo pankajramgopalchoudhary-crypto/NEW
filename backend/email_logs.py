@@ -47,6 +47,12 @@ async def ensure_indexes() -> None:
     if _logs is None:
         return
     try:
+        # A pre-existing non-sparse unique index on provider_message_id makes the
+        # second queued email (id still null) fail with a duplicate key error.
+        info = await _logs.index_information()
+        existing = info.get("provider_message_id_1")
+        if existing and not existing.get("sparse"):
+            await _logs.drop_index("provider_message_id_1")
         await _logs.create_index("provider_message_id", unique=True, sparse=True)
         await _logs.create_index([("ticket_id", 1), ("created_at", -1)])
         await _logs.create_index([("supabase_user_id", 1), ("created_at", -1)])
@@ -102,7 +108,8 @@ async def log_email(
         "subject": subject,
         "template": template,
         "provider": "resend",
-        "provider_message_id": None,
+        # `provider_message_id` is intentionally omitted until the send succeeds:
+        # the unique sparse index only skips MISSING fields, not explicit nulls.
         "status": "queued",
         "error": None,
         "created_at": _now(),

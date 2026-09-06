@@ -9,7 +9,7 @@ const SESSION_HOURS = 8;
 
 const ROLE_PERMS = {
   founder: ['*'],
-  manager: ['dashboard', 'analytics', 'leads', 'clients', 'documents', 'invoices', 'payments', 'coupons', 'founders-club', 'staff:own'],
+  manager: ['dashboard', 'analytics', 'leads', 'clients', 'documents', 'invoices', 'payments', 'coupons', 'founders-club', 'services', 'staff:own'],
   staff: ['dashboard', 'leads', 'clients', 'documents:read', 'invoices', 'payments:read'],
   reviewer: ['documents'],
 };

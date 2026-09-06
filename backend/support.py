@@ -307,9 +307,13 @@ async def one_ticket(tid: str, authorization: Optional[str] = Header(default=Non
     # Customer can only see their own; staff can see any.
     if not _is_staff(caller["role"]) and t.get("customer_email", "").lower() != caller.get("email", "").lower():
         raise HTTPException(403, "Not your ticket")
+    caller_is_staff = _is_staff(caller["role"])
     msgs = []
     async for m in _messages.find({"ticket_id": tid}).sort("created_at", 1):
         m.pop("_id", None)
+        # Internal staff notes are staff-only — never expose them to a customer.
+        if not caller_is_staff and m.get("from_role") == "internal":
+            continue
         msgs.append(m)
     return {"ticket": _ticket_doc(t), "messages": msgs}
 

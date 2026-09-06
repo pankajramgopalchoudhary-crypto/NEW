@@ -634,6 +634,89 @@ async function handle(request, { params }) {
       return json({ ok: true });
     }
 
+    // ============ SERVICE CATALOG (Mongo `service_catalog`) ============
+    // Single canonical price source for standalone purchasable services.
+    if (route === '/admin/services' && method === 'GET') {
+      const auth = await requireRole(request, 'founder', 'manager');
+      if (!auth.ok) return json({ error: auth.error }, auth.status);
+      const c = await col('service_catalog');
+      const services = await c.find({}).sort({ sort_order: 1 }).toArray();
+      return json({ services: services.map(({ _id, ...rest }) => ({ id: _id, ...rest })) });
+    }
+
+    if (route === '/admin/services' && method === 'POST') {
+      const auth = await requireRole(request, 'founder');
+      if (!auth.ok) return json({ error: auth.error }, auth.status);
+      const body = await request.json();
+      const slug = String(body.slug || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+      if (!slug || !body.name) return json({ error: 'slug and name are required' }, 400);
+      const price = Number(body.price_aed);
+      if (!Number.isFinite(price) || price <= 0) return json({ error: 'price_aed must be greater than 0' }, 400);
+      const c = await col('service_catalog');
+      if (await c.findOne({ slug })) return json({ error: 'A service with this slug already exists' }, 409);
+      const doc = {
+        _id: uuid(),
+        slug,
+        name: body.name,
+        category: body.category || 'other',
+        price_aed: price,
+        currency: 'AED',
+        billing: body.billing || 'one-time',
+        price_label: body.price_label || `AED ${price.toLocaleString()} ${body.billing === 'monthly' ? '/month starting' : 'one-time'}`,
+        description: body.description || '',
+        features: Array.isArray(body.features) ? body.features : String(body.features || '').split('\n').map(s => s.trim()).filter(Boolean),
+        is_active: body.is_active !== false,
+        sort_order: Number(body.sort_order) || 100,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+      await c.insertOne(doc);
+      await auditLog(auth.session, 'service.create', { slug, price_aed: price });
+      const { _id, ...rest } = doc;
+      return json({ ok: true, service: { id: _id, ...rest } });
+    }
+
+    if (route.startsWith('/admin/services/') && method === 'PATCH') {
+      const auth = await requireRole(request, 'founder');
+      if (!auth.ok) return json({ error: auth.error }, auth.status);
+      const slug = decodeURIComponent(route.split('/').pop());
+      const body = await request.json();
+      const patch = { updated_at: new Date().toISOString() };
+      if (body.name !== undefined) patch.name = body.name;
+      if (body.category !== undefined) patch.category = body.category;
+      if (body.billing !== undefined) patch.billing = body.billing;
+      if (body.price_label !== undefined) patch.price_label = body.price_label;
+      if (body.description !== undefined) patch.description = body.description;
+      if (body.sort_order !== undefined) patch.sort_order = Number(body.sort_order) || 100;
+      if (body.is_active !== undefined) patch.is_active = !!body.is_active;
+      if (body.features !== undefined) {
+        patch.features = Array.isArray(body.features)
+          ? body.features
+          : String(body.features || '').split('\n').map(s => s.trim()).filter(Boolean);
+      }
+      if (body.price_aed !== undefined) {
+        const price = Number(body.price_aed);
+        if (!Number.isFinite(price) || price <= 0) return json({ error: 'price_aed must be greater than 0' }, 400);
+        patch.price_aed = price;
+      }
+      const c = await col('service_catalog');
+      const r = await c.updateOne({ slug }, { $set: patch });
+      if (!r.matchedCount) return json({ error: 'Service not found' }, 404);
+      await auditLog(auth.session, 'service.update', { slug, ...patch });
+      return json({ ok: true });
+    }
+
+    if (route.startsWith('/admin/services/') && method === 'DELETE') {
+      const auth = await requireRole(request, 'founder');
+      if (!auth.ok) return json({ error: auth.error }, auth.status);
+      const slug = decodeURIComponent(route.split('/').pop());
+      const c = await col('service_catalog');
+      const r = await c.updateOne({ slug }, { $set: { is_active: false, updated_at: new Date().toISOString() } });
+      if (!r.matchedCount) return json({ error: 'Service not found' }, 404);
+      await auditLog(auth.session, 'service.deactivate', { slug });
+      return json({ ok: true });
+    }
+
     // ============ STAFF & ACCESS ============
     if (route === '/admin/staff' && method === 'GET') {
       const auth = await requireRole(request, 'founder', 'manager');
@@ -924,6 +1007,17 @@ async function handle(request, { params }) {
       return json({ ...DEFAULTS, ...(doc || {}) });
     }
 
+    // Aria suggestion audit trail (Mongo `ai_support_logs`, written by the FastAPI backend)
+    if (route === '/admin/ai-support/logs' && method === 'GET') {
+      const auth = await requireRole(request);
+      if (!auth.ok) return json({ error: auth.error }, auth.status);
+      const { searchParams } = new URL(request.url);
+      const limit = Math.min(Number(searchParams.get('limit') || 50), 200);
+      const logs = await col('ai_support_logs');
+      const rows = await logs.find({}).sort({ created_at: -1 }).limit(limit).toArray();
+      return json({ items: rows.map(({ _id, ...rest }) => ({ id: _id, ...rest })), total: rows.length });
+    }
+
     if (route === '/admin/support-analytics' && method === 'GET') {      const auth = await requireRole(request);
       if (!auth.ok) return json({ error: auth.error }, auth.status);
       const days = Number(new URL(request.url).searchParams.get('days') || 30);
@@ -1065,23 +1159,60 @@ async function handle(request, { params }) {
 
     // ============ EMAIL LOGS ============
 
+    // Resend delivery stats (Mongo `email_logs`, written by the FastAPI backend)
+    if (route === '/admin/email-logs/stats' && method === 'GET') {
+      const auth = await requireRole(request, 'founder', 'manager');
+      if (!auth.ok) return json({ error: auth.error }, auth.status);
+      const { searchParams } = new URL(request.url);
+      const days = Math.min(Number(searchParams.get('days') || 7), 365);
+      const since = new Date(Date.now() - days * 86400000).toISOString();
+      const logs = await col('email_logs');
+      const rows = await logs.aggregate([
+        { $match: { created_at: { $gte: since } } },
+        { $group: { _id: '$status', n: { $sum: 1 } } },
+      ]).toArray();
+      const stats = {
+        total: 0, queued: 0, sent: 0, delivered: 0, delivery_delayed: 0,
+        bounced: 0, failed: 0, complained: 0, opened: 0, clicked: 0,
+      };
+      for (const r of rows) {
+        stats.total += r.n;
+        if (stats[r._id] !== undefined) stats[r._id] += r.n;
+      }
+      const byAlias = await logs.aggregate([
+        { $match: { created_at: { $gte: since } } },
+        { $group: { _id: '$from_alias', n: { $sum: 1 } } },
+        { $sort: { n: -1 } },
+      ]).toArray();
+      return json({ ...stats, days, by_alias: byAlias.map(a => ({ from_alias: a._id || 'unknown', count: a.n })) });
+    }
+
     if (route === '/admin/email-logs' && method === 'GET') {
       const auth = await requireRole(request, 'founder', 'manager');
       if (!auth.ok) return json({ error: auth.error }, auth.status);
       const { searchParams } = new URL(request.url);
       const page   = Number(searchParams.get('page') || 1);
-      const limit  = Number(searchParams.get('limit') || 50);
-      const type   = searchParams.get('type') || undefined;
-      const status = searchParams.get('status') || undefined;
+      const limit  = Math.min(Number(searchParams.get('limit') || 50), 200);
       const query  = {};
-      if (type)   query.type   = type;
+      const status = searchParams.get('status');
+      const alias  = searchParams.get('from_alias');
+      const type   = searchParams.get('type') || searchParams.get('event_type');
+      const q      = searchParams.get('q');
       if (status) query.status = status;
+      if (alias)  query.from_alias = alias;
+      if (type)   query.event_type = type;
+      if (q) {
+        const rx = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+        query.$or = [{ to: rx }, { subject: rx }, { event_type: rx }];
+      }
       const logs = await col('email_logs');
-      const [items, total] = await Promise.all([
-        logs.find(query).sort({ timestamp: -1 }).skip((page - 1) * limit).limit(limit).toArray(),
+      const [rows, total] = await Promise.all([
+        logs.find(query).sort({ created_at: -1 }).skip((page - 1) * limit).limit(limit).toArray(),
         logs.countDocuments(query),
       ]);
-      return json({ logs: items, total, page, pages: Math.ceil(total / limit) });
+      const items = rows.map(({ _id, ...rest }) => ({ id: _id, ...rest }));
+      // `items` is what the Email Health page reads; `logs` kept for older callers.
+      return json({ items, logs: items, total, page, pages: Math.ceil(total / limit) });
     }
 
     if (route === '/admin/email/send' && method === 'POST') {

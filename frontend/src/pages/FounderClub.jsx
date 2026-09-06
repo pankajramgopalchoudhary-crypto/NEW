@@ -6,6 +6,7 @@ import { Button } from '../components/ui/button';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../hooks/use-toast';
 import { paymentsApi } from '../lib/backendApi';
+import { createServiceOrder } from '../lib/checkoutSupabase';
 import {
   Crown, CheckCircle2, ArrowRight, Sparkles, ShieldCheck, Bell,
   TrendingUp, Users, Gift, Headphones, Loader2,
@@ -65,18 +66,26 @@ export default function FounderClub() {
   const [params] = useSearchParams();
   const [buying, setBuying] = useState(false);
 
-  // Direct 1-click Stripe checkout for AED 999 lifetime membership.
+  // 1-click purchase. The AED 999 price comes from the server catalog —
+  // the order is created and priced server-side, then Stripe is opened
+  // against that order reference.
   const buyNow = async () => {
     if (!user) { navigate('/login?next=/founder-club?buy=1'); return; }
     setBuying(true);
     try {
+      const order = await createServiceOrder({
+        slugs: ['founders-club-lifetime'],
+        contact: { name: user.user_metadata?.full_name || user.email, email: user.email },
+        user,
+      });
       const res = await paymentsApi.createSession({
-        amount_aed: 999,
+        order_ref: order.id,
+        amount_aed: order.final_total,
         currency: 'AED',
         customer_email: user.email,
         description: 'SmartSetupUAE Founder Club — Lifetime',
         origin_url: window.location.origin,
-        package_id: 'founder_club_lifetime',
+        package_id: 'founders-club-lifetime',
       });
       if (res?.url) window.location.href = res.url;
       else throw new Error('No checkout URL returned');

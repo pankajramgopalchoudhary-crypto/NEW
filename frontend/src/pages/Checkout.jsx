@@ -496,7 +496,7 @@ export default function Checkout() {
     if (!bankProof.payer_name) return toast({ title: 'Add the payer name' });
     setBusy(true);
     try {
-      const amount = payChoice === 'full' ? breakdown.total : getPrebookingAmount();
+      const amount = payChoice === 'full' ? (Number(order?.final_total) || breakdown.total) : getPrebookingAmount();
       await markBankTransferSubmitted(order, { ...bankProof, reference: order.reference, amount_aed: amount, payment_choice: payChoice });
       toast({ title: 'Proof received', description: 'We will verify within 24 hours.' });
       // Founder Club: persist membership in Supabase (RLS-protected) — falls back gracefully if tables aren't migrated.

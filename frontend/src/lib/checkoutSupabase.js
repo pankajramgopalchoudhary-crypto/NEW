@@ -1,4 +1,5 @@
 import { postgrestValue, supabaseRest } from './supabaseRest';
+import { ordersApi } from './backendApi';
 
 const PREBOOKING_AMOUNT_AED = 999;
 const VISA_PRICE_AED = 5912;   // fallback only — live values come from freezone_pricing
@@ -152,87 +153,67 @@ export async function loadCheckoutPricing() {
   };
 }
 
-function buildOrderReference() {
-  const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-  const suffix = Math.random().toString(36).slice(2, 7).toUpperCase();
-  return `SSU-${date}-${suffix}`;
-}
-
-function newUuid() {
-  return (typeof window !== 'undefined' && window.crypto?.randomUUID)
-    ? window.crypto.randomUUID()
-    : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
-        const r = (Math.random() * 16) | 0;
-        return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16);
-      });
-}
-
-function buildOrderPayload(draft, totalAed, user) {
-  const reference = buildOrderReference();
+/**
+ * Order creation is SERVER-SIDE only.
+ *
+ * The browser sends *what* is being bought (package + add-on identifiers,
+ * contact, coupon). The backend re-prices every line from the canonical
+ * sources, snapshots the line items and writes `checkout_orders` with the
+ * service-role key — so totals can never be tampered with from the client.
+ */
+export async function createCheckoutOrder(draft, _totalAed, user) {
   const contact = draft.contact || {};
   const business = draft.business || {};
-  const addonsTotal = (draft.addons || []).reduce((sum, a) => sum + money(a.price, 0), 0);
-  const finalTotal = money(totalAed, 0);
-  const basePrice = Math.max(finalTotal - addonsTotal, 0);
 
-  const noteParts = [
-    `Ref: ${reference}`,
-    business.activity ? `Activity: ${business.activity}` : null,
-    (business.company_names || []).filter(Boolean).length ? `Company names: ${(business.company_names || []).filter(Boolean).join(', ')}` : null,
-    draft.office_type ? `Office: ${draft.office_type}` : null,
-    user?.id ? `User: ${user.id}` : null,
-  ].filter(Boolean);
+  const items = [
+    {
+      kind: 'package',
+      package_id: draft.package_id || null,
+      freezone: draft.zone_name || null,
+      package_name: draft.package_name || null,
+    },
+    ...(draft.addons || []).map((addon) => ({
+      kind: 'addon',
+      addon_id: addon.addon_id || null,
+      addon_name: addon.label || addon.addon_name || null,
+    })),
+  ];
 
-  return {
-    id: newUuid(),
-    reference,
-    order_ref: reference,   // persisted column — keeps admin + dashboard refs identical
-    customer_name: contact.name || null,
-    customer_email: contact.email || null,
-    customer_phone: contact.phone ? `${contact.phone_code || ''} ${contact.phone}`.trim() : null,
-    freezone: draft.zone_name || draft.zone_slug || 'Free Zone',
-    package_id: draft.package_id || null,
-    package_name: draft.package_name || draft.zone_name || null,
+  const order = await ordersApi.create({
+    items,
+    contact: {
+      name: contact.name || null,
+      email: contact.email,
+      phone: contact.phone || null,
+      phone_code: contact.phone_code || null,
+    },
+    business,
+    zone_name: draft.zone_name || null,
+    zone_slug: draft.zone_slug || null,
+    package_name: draft.package_name || null,
     duration_years: money(draft.duration_years, 1),
     visa_count: money(draft.visa_count, 0),
-    shareholder_count: money(business.shareholders, 1),
-    base_price: basePrice,
-    addons_total: addonsTotal,
-    discount_total: money(draft.discount_total, 0),
-    final_total: finalTotal,
-    currency: 'AED',
-    status: 'draft',
-    notes: noteParts.join(' | ') || null,
-  };
+    office_type: draft.office_type || null,
+    coupon_code: draft.coupon_code || null,
+    user_id: user?.id || null,
+  });
+
+  return order;
 }
 
-async function recalculateOrder(orderId) {
-  return supabaseRest.rpc('recalculate_checkout_order', { p_order_id: orderId });
-}
-
-export async function createCheckoutOrder(draft, totalAed, user) {
-  const orderPayload = buildOrderPayload(draft, totalAed, user);
-  const { reference, ...orderRow } = orderPayload;
-  await supabaseRest.insert('checkout_orders', [orderRow], null, 'return=minimal');
-  const orderId = orderRow.id;
-
-  for (const addon of draft.addons || []) {
-    await supabaseRest.insert('checkout_order_addons', [{
-      order_id: orderId,
-      addon_name: addon.label || addon.addon_name || 'Add-on',
-      addon_category: addon.addon_category || null,
-      price: money(addon.price, 0),
-      currency: 'AED',
-    }], null, 'return=minimal');
-  }
-
-  try {
-    await recalculateOrder(orderId);
-  } catch (error) {
-    console.warn('[checkout] Order saved but recalculation skipped:', error.message);
-  }
-
-  return { id: orderId, reference, ...orderRow };
+/** Buy standalone catalog services (accounting, tax, Founder Club). */
+export async function createServiceOrder({ slugs, contact, couponCode, user }) {
+  return ordersApi.create({
+    items: (slugs || []).map((slug) => ({ kind: 'service', slug })),
+    contact: {
+      name: contact?.name || null,
+      email: contact?.email,
+      phone: contact?.phone || null,
+      phone_code: contact?.phone_code || null,
+    },
+    coupon_code: couponCode || null,
+    user_id: user?.id || null,
+  });
 }
 
 export async function markBankTransferSubmitted(order, bankProof) {

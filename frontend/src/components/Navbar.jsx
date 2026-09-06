@@ -39,6 +39,7 @@ const NAV = [
       { label: 'Accounting', href: '/services/accounting' },
       { label: 'PRO Services', href: '/services/pro-services' },
       { label: 'Compliance', href: '/services/compliance' },
+      { label: 'Tax, Audit & Bookkeeping', href: '/accounting' },
     ],
   },
   {

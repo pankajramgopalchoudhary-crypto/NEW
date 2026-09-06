@@ -25,6 +25,7 @@ const Compare = lazy(() => import('./pages/Compare'));
 const ServicePage = lazy(() => import('./pages/ServicePage'));
 const FAQs = lazy(() => import('./pages/FAQs'));
 const FounderClub = lazy(() => import('./pages/FounderClub'));
+const AccountingServices = lazy(() => import('./pages/AccountingServices'));
 const Blog = lazy(() => import('./pages/Blog'));
 const About = lazy(() => import('./pages/About'));
 const Consultation = lazy(() => import('./pages/Consultation'));
@@ -202,6 +203,7 @@ function App() {
                   <Route path="/services/:slug" element={<ServicePage />} />
                   <Route path="/faqs" element={<FAQs />} />
                   <Route path="/founder-club" element={<FounderClub />} />
+                  <Route path="/accounting" element={<AccountingServices />} />
                   <Route path="/activities" element={<Activities />} />
                   <Route path="/photo-studio" element={<PhotoStudio />} />
                   <Route path="/preview-hero" element={<HeroPreview />} />

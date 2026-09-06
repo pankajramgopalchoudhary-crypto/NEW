@@ -1,0 +1,47 @@
+{
+  "summary": "Verified server-side orders + service catalog + internal-note security regression + admin (all 4 roles) + customer /accounting + /founder-club Stripe redirect. 12/12 pytest cases pass. All 21 admin sidebar pages render without redirect-to-login. Founder-club logged-in purchase creates a server-priced AED 999 order and redirects to Stripe checkout showing AED 999.00.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/admin/ai-support/logs", "issue": "Returns 404 - AI Support admin page requests logs endpoint that isn't implemented"},
+      {"endpoint": "/api/admin/email-logs/stats", "issue": "Returns 404 - Email Health admin page requests stats endpoint that isn't implemented"}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {"flow": "Admin AI Support page", "issue": "Page loads but fetches /api/admin/ai-support/logs which returns 404 (endpoint missing).", "affected_selectors": ["/admin/ai-support"]},
+      {"flow": "Admin Email Health page", "issue": "Page loads but fetches /api/admin/email-logs/stats which returns 404 (endpoint missing).", "affected_selectors": ["/admin/email-health"]}
+    ],
+    "design_issues": [
+      {"screen": "/accounting hero + /founder-club hero", "issues": ["Heading text 'Stay compliant / without a finance team.' is nearly invisible against the light hero-gradient background — very low contrast. Confirmed pre-existing per session context note, not a regression from this session."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_internal_notes.py",
+    "/app/backend/tests/test_orders_and_catalog.py",
+    "/app/test_reports/pytest/orders_catalog_notes.xml"
+  ],
+  "action_items": [
+    "(low) Implement /api/admin/ai-support/logs so the AI Support page has data (currently 404).",
+    "(low) Implement /api/admin/email-logs/stats so the Email Health widgets have data (currently 404).",
+    "(design, pre-existing) Fix hero heading contrast on /accounting and /founder-club — the hero-gradient class puts white/near-white bold text on a very pale gradient, making the H1 nearly unreadable."
+  ],
+  "critical_code_review_comments": [
+    "orders.py POST /api/orders correctly re-prices from Mongo service_catalog / Supabase freezone_packages and ignores any price_aed / final_total sent by the client — verified: forged single-service order with price_aed=1 stored as 1000.",
+    "orders.py get_order strips MongoDB _id from the response - good.",
+    "services_catalog.py DELETE is a soft-delete (sets is_active=false). This is fine but should be documented; it does mean GET /api/admin/services still shows the row until Mongo doc is removed manually.",
+    "admin/app/api/[[...path]]/route.js Set-Cookie uses `Secure` — works on http://localhost in Chromium but would fail on plain-http non-localhost. Non-issue in production (HTTPS).",
+    "Next.js dev server on port 3001 keeps hitting its memory threshold and self-restarting (`Server is approaching the used memory threshold, restarting...`). Non-blocking for testing but causes ~2s recompiles that briefly break navigation. Consider bumping NODE_OPTIONS max-old-space-size."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_orders_and_catalog.py (new — 10 tests for /api/services and /api/orders)"
+  ],
+  "success_rate": {"backend": "100% (12/12 pytest)", "frontend": "100% (all 21 admin pages + /accounting + /founder-club purchase flow)"},
+  "test_credentials": "Read from /app/memory/test_credentials.md — all 4 admin logins verified (founder password, manager password, staff01 PIN via /api/admin/auth/pin, reviewer01 PIN via /api/admin/auth/pin). Customer client@smartsetupuae.ae / Client@2026 verified via Supabase auth on /login and successful POST /api/orders while authenticated.",
+  "seed_data_creation": "Created and cleaned up a temporary service 'test-svc-t1' in Mongo service_catalog to verify create/patch/soft-delete/hard-delete. Test orders posted under customer_email 'TEST_orders_*@example.com' — safe to leave; snapshots collection uses UUID ids.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "PIN login uses /api/admin/auth/pin (not /api/admin/auth/login). Do not use `page.get_by_role('button', name='Sign in', exact=True)` on /login — there are TWO elements with that text (the tab + the submit). Use form/button[type=submit] instead. On /accounting the 'Buy this service' redirect target is /login?next=/accounting when logged out. When testing admin nav, ALWAYS wait for the redirect off /admin/login using wait_for_function on pathname, because '**/admin/**' matches /admin/login too. Next.js dev server auto-restarts when memory threshold hit — retry navigation once after ~3s if you see ERR_CONNECTION_REFUSED.",
+  "rca of the issue": "N/A — no regressions found. Two 404 endpoints (/api/admin/ai-support/logs, /api/admin/email-logs/stats) are missing backend routes for two admin pages; the pages themselves render (empty state) so they don't error out."
+}
