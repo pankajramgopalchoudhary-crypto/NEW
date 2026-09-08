@@ -204,7 +204,9 @@ export async function createCheckoutOrder(draft, _totalAed, user) {
 /** Buy standalone catalog services (accounting, tax, Founder Club). */
 export async function createServiceOrder({ slugs, contact, couponCode, user }) {
   return ordersApi.create({
-    items: (slugs || []).map((slug) => ({ kind: 'service', slug })),
+    items: (slugs || []).map((item) => typeof item === 'string'
+      ? { kind: 'service', slug: item }
+      : { kind: 'service', slug: item.slug, service_variant: item.service_variant || null }),
     contact: {
       name: contact?.name || null,
       email: contact?.email,

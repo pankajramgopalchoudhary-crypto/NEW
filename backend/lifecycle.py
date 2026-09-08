@@ -164,6 +164,21 @@ async def create_appointment(a: Appointment, user: dict = Depends(get_user)):
     doc["created_at"] = _now()
     doc["created_by"] = user["email"]
     await _db.appointments.insert_one(doc)
+    try:
+        from notify_triggers import notify_appointment_scheduled
+        await notify_appointment_scheduled(
+            client_email=a.client_email,
+            client_name="",
+            appointment_type=a.appointment_type.replace("_", " ").title(),
+            date_iso=a.date,
+            location=a.location_name,
+            address=a.address,
+            map_url=a.map_url or "",
+            documents=a.documents_required or [],
+            order_id=a.order_ref,
+        )
+    except Exception as exc:
+        logger.warning("appointment notification failed: %s", exc)
     doc.pop("_id", None)
     return doc
 
@@ -438,6 +453,20 @@ async def create_invoice(inv: InvoiceCreate, user: dict = Depends(get_user)):
     doc["created_at"] = _now()
     doc["created_by"] = user["email"]
     await _db.invoices.insert_one(doc)
+    try:
+        from notify_triggers import notify_invoice_created
+        await notify_invoice_created(
+            client_email=inv.client_email,
+            client_name="",
+            invoice_id=doc["id"],
+            invoice_number=doc["number"],
+            order_id=inv.order_ref,
+            total=inv.total,
+            currency=inv.currency,
+            doc_type=inv.doc_type,
+        )
+    except Exception as exc:
+        logger.warning("invoice email failed for %s: %s", doc["id"], exc)
     doc.pop("_id", None)
     return doc
 

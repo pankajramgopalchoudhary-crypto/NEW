@@ -25,6 +25,7 @@ from typing import Any, Dict, List, Literal, Optional
 import httpx
 from fastapi import APIRouter, HTTPException
 from motor.motor_asyncio import AsyncIOMotorClient
+from pymongo.errors import DuplicateKeyError
 from pydantic import BaseModel, EmailStr, Field
 
 from services_catalog import get_service
@@ -103,6 +104,7 @@ class OrderItemIn(BaseModel):
     freezone: Optional[str] = None      # package fallback lookup
     package_name: Optional[str] = None  # package fallback lookup
     addon_name: Optional[str] = None    # addon fallback lookup
+    service_variant: Optional[str] = None  # validated annual pricing tier
     qty: int = Field(default=1, ge=1, le=50)
 
 
@@ -135,6 +137,15 @@ async def _price_service(item: OrderItemIn) -> Dict[str, Any]:
     if not svc:
         raise HTTPException(400, f"Unknown or inactive service: {item.slug}")
     unit = _money(svc.get("price_aed"))
+    selected_variant = None
+    options = svc.get("pricing_options") or []
+    if item.service_variant:
+        selected_variant = next((o for o in options if o.get("id") == item.service_variant), None)
+        if not selected_variant:
+            raise HTTPException(400, f"Unknown pricing tier for service: {item.slug}")
+        if selected_variant.get("on_request"):
+            raise HTTPException(400, "This auditing tier is quoted case by case. Please submit an enquiry.")
+        unit = _money(selected_variant.get("annual"))
     if unit <= 0:
         raise HTTPException(400, f"Service {item.slug} has no valid price")
     return {
@@ -148,6 +159,8 @@ async def _price_service(item: OrderItemIn) -> Dict[str, Any]:
         "line_total_aed": round(unit * item.qty, 2),
         "features": svc.get("features") or [],
         "source": "mongo:service_catalog",
+        "service_variant": selected_variant.get("id") if selected_variant else None,
+        "monthly_equivalent": _money(selected_variant.get("monthly"), svc.get("monthly_equivalent")) if selected_variant else _money(svc.get("monthly_equivalent"), 0),
     }
 
 
@@ -242,11 +255,16 @@ def _apply_founder_discount(line_items: List[Dict[str, Any]]) -> Dict[str, Any]:
     }
 
 
-async def _coupon_discount(code: str, subtotal: float) -> Dict[str, Any]:
+async def _coupon_discount(code: str, subtotal: float, line_items: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
     rows = await _sb_get("coupons", {"code": f"eq.{code.upper()}", "select": "*"})
     if not rows or rows[0].get("is_active") is False:
         return {"code": code, "applied": False, "amount_aed": 0.0, "reason": "invalid or inactive coupon"}
     c = rows[0]
+    if c.get("code", "").upper() == "MURTAZA20000":
+        allowed = {"corporate-tax-registration", "corporate-tax-filing", "auditing", "bookkeeping"}
+        service_refs = {str(li.get("ref", "")).split(":", 1)[0] for li in (line_items or []) if li.get("kind") == "service"}
+        if not service_refs or not service_refs.issubset(allowed):
+            return {"code": code, "applied": False, "amount_aed": 0.0, "reason": "coupon only applies to tax, auditing and bookkeeping services"}
     limit = c.get("usage_limit")
     if limit is not None and _money(c.get("used_count"), 0) >= _money(limit, 0):
         return {"code": code, "applied": False, "amount_aed": 0.0, "reason": "usage limit reached"}
@@ -255,6 +273,43 @@ async def _coupon_discount(code: str, subtotal: float) -> Dict[str, Any]:
     amount = round(min(max(amount, 0.0), subtotal), 2)
     return {"code": c.get("code"), "applied": amount > 0, "amount_aed": amount,
             "discount_type": c.get("discount_type"), "discount_value": value}
+
+
+async def ensure_murtaza_coupon() -> None:
+    """Create the named one-use service coupon without overwriting it."""
+    if not SUPABASE_URL or not SUPABASE_SERVICE_KEY:
+        return
+    if await _sb_get("coupons", {"code": "eq.MURTAZA20000", "select": "code", "limit": "1"}):
+        return
+    payload = {
+        "code": "MURTAZA20000",
+        "discount_type": "fixed",
+        "discount_value": 20000,
+        "usage_limit": 1,
+        "used_count": 0,
+        "description": "One-time AED 20,000 discount for Murtaza: Corporate Tax, Auditing and Bookkeeping only.",
+        "is_active": True,
+    }
+    try:
+        async with httpx.AsyncClient(timeout=12) as client:
+            response = await client.post(
+                f"{SUPABASE_URL}/rest/v1/coupons",
+                headers={**SVC, "Prefer": "return=minimal"},
+                json=[payload],
+            )
+            if response.status_code >= 400:
+                logger.warning("Murtaza coupon seed failed %s: %s", response.status_code, response.text[:300])
+    except Exception as exc:
+        logger.warning("Murtaza coupon seed failed: %s", exc)
+
+
+async def _claim_one_time_coupon(code: Optional[str], order_id: str) -> None:
+    if (code or "").upper() != "MURTAZA20000":
+        return
+    try:
+        await _db["coupon_redemptions"].insert_one({"_id": "MURTAZA20000", "order_id": order_id, "created_at": _now()})
+    except DuplicateKeyError:
+        raise HTTPException(400, "This one-time coupon has already been used")
 
 
 # ----------------------------------------------------------------- endpoint
@@ -285,7 +340,7 @@ async def create_order(payload: OrderIn):
     coupon = None
     discount_total = founder["amount_aed"]
     if payload.coupon_code:
-        coupon = await _coupon_discount(payload.coupon_code, subtotal - discount_total)
+        coupon = await _coupon_discount(payload.coupon_code, subtotal - discount_total, line_items)
         discount_total = round(discount_total + coupon["amount_aed"], 2)
 
     final_total = round(max(subtotal - discount_total, 0.0), 2)
@@ -298,6 +353,8 @@ async def create_order(payload: OrderIn):
 
     order_id = str(uuid.uuid4())
     reference = _reference()
+    if coupon and coupon.get("applied"):
+        await _claim_one_time_coupon(payload.coupon_code, order_id)
     contact = payload.contact
     notes = " | ".join(filter(None, [
         f"Ref: {reference}",

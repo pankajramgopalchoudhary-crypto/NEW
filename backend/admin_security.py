@@ -51,18 +51,16 @@ class OtpVerify(BaseModel):
     code: str
 
 
-def _send_otp_email(to: str, code: str):
-    if not RESEND_API_KEY:
-        logger.warning("RESEND_API_KEY missing — OTP not emailed. DEV CODE=%s", code)
-        return
+async def _send_otp_email(to: str, code: str):
     try:
-        import resend
-        resend.api_key = RESEND_API_KEY
-        resend.Emails.send({
-            "from": RESEND_FROM,
-            "to": [to],
-            "subject": f"SmartSetupUAE admin OTP: {code}",
-            "html": f"""
+        from notifications import send_and_log_email
+        return await send_and_log_email(
+            to=to,
+            subject=f"SmartSetupUAE admin OTP: {code}",
+            event_type="admin_otp",
+            template="admin_otp",
+            from_alias="noreply",
+            html=f"""
             <div style="font-family:Inter,Arial;max-width:480px;margin:auto;">
               <h2 style="color:#0F2A2A;">Your admin login code</h2>
               <p>Use this code to finish signing in. It expires in 10 minutes.</p>
@@ -77,9 +75,10 @@ def _send_otp_email(to: str, code: str):
               </p>
             </div>
             """,
-        })
-    except Exception as e:  # noqa
+        )
+    except Exception as e:
         logger.warning("OTP email failed: %s", e)
+        return {"ok": False, "error": str(e)}
 
 
 @router.post("/api/admin/auth/otp/request")
@@ -98,7 +97,7 @@ async def otp_request(payload: OtpRequest):
         "created_at": datetime.now(timezone.utc).isoformat(),
         "attempts": 0,
     })
-    _send_otp_email(payload.email, code)
+    await _send_otp_email(payload.email, code)
     return {"ok": True}
 
 

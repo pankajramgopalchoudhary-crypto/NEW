@@ -16,6 +16,8 @@ const MESSAGES = 'support_messages';
 const nowIso = () => new Date().toISOString();
 const toAdminStatus = (s) => (s === 'in_progress' ? 'pending' : s);
 const toBackendStatus = (s) => (s === 'pending' ? 'in_progress' : s);
+const VALID_CATEGORIES = new Set(['general', 'technical', 'account', 'payment', 'visa', 'compliance', 'sales', 'foundersclub', 'other']);
+const VALID_PRIORITIES = new Set(['low', 'medium', 'high', 'urgent']);
 
 // ─── Serialisers ───────────────────────────────────────────────────────────────
 
@@ -94,6 +96,8 @@ export async function createTicket(data) {
   if (!name || !email || !subject || !message) {
     throw new Error('name, email, subject and message are required');
   }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email)) || String(subject).length > 200 || String(message).length > 4000) throw new Error('Invalid ticket fields');
+  if (!VALID_CATEGORIES.has(category) || !VALID_PRIORITIES.has(priority)) throw new Error('Invalid ticket category or priority');
 
   const tickets = await col(TICKETS);
   const messages = await col(MESSAGES);
@@ -139,7 +143,7 @@ export async function listTickets({ status, priority, category, assignedTo, sear
   if (category && category !== 'all') query.category = category;
   if (assignedTo) query.assigned_to = assignedTo;
   if (search) {
-    const re = { $regex: search, $options: 'i' };
+    const re = { $regex: String(search).replace(/[.*+?^${}()|[\]\\]/g, '\\$&').slice(0, 100), $options: 'i' };
     query.$or = [{ customer_name: re }, { customer_email: re }, { subject: re }, { ticket_number: re }];
   }
   const skip = (page - 1) * limit;
@@ -189,7 +193,7 @@ export async function replyToTicket({ ticketId, sender, message, attachments = [
       to: t.customer_email,
       subject: `Update on your ticket ${t.ticket_number || t._id}: ${t.subject}`,
       html: ticketReplyHtml({ name: t.customer_name, ticketId: t.ticket_number || t._id, message, adminName }),
-      userId: t.supabase_user_id, relatedModule: 'support',
+      userId: t.supabase_user_id, ticketId: t._id, relatedModule: 'support',
     }).catch(() => {});
   }
 
@@ -215,7 +219,7 @@ export async function updateTicketStatus({ ticketId, status }) {
       to: t.customer_email,
       subject: `Your ticket ${t.ticket_number || t._id} has been ${status}`,
       html: ticketStatusHtml({ name: t.customer_name, ticketId: t.ticket_number || t._id, subject: t.subject, status }),
-      userId: t.supabase_user_id, relatedModule: 'support',
+      userId: t.supabase_user_id, ticketId: t._id, relatedModule: 'support',
     }).catch(() => {});
   }
   return { ok: true, status };

@@ -95,6 +95,8 @@ export async function sendEmail({
   replyToOverride,
   userId,
   relatedModule,
+  ticketId,
+  orderId,
 }) {
   const RESEND_KEY = process.env.RESEND_API_KEY;
   if (!RESEND_KEY) {
@@ -148,9 +150,11 @@ export async function sendEmail({
   try {
     const logs = await col('email_logs');
     await logs.insertOne({
+      created_at: new Date().toISOString(),
       to: recipients,
-      from: cfg.fromEmail,
-      fromName: cfg.fromName,
+      from: fromField,
+      from_alias: type,
+      event_type: relatedModule || type,
       type,
       subject,
       status,
@@ -158,6 +162,8 @@ export async function sendEmail({
       error: errorMessage,
       userId: userId || null,
       relatedModule: relatedModule || null,
+      ticket_id: ticketId || null,
+      order_id: orderId || null,
       timestamp: new Date(),
     });
   } catch (logErr) {

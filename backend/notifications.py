@@ -122,10 +122,13 @@ async def send_and_log_email(
 async def _send_resend_email(to: str, subject: str, html: str,
                              cc: Optional[str] = None,
                              from_alias: str = "noreply",
-                             event_type: str = "generic") -> Dict[str, Any]:
+                             event_type: str = "generic",
+                             ticket_id: Optional[str] = None,
+                             order_id: Optional[str] = None) -> Dict[str, Any]:
     return await send_and_log_email(
         to=to, subject=subject, html=html, cc=cc,
         from_alias=from_alias, event_type=event_type,
+        ticket_id=ticket_id, order_id=order_id,
     )
 
 

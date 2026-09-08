@@ -20,19 +20,35 @@ import {
   updateTicketStatus, assignTicket, addInternalNote, getTicketStats, getSupportAnalytics,
 } from '@/lib/tickets/ticketService';
 import { sendEmail as sendRoutedEmail, getEmailConfig } from '@/lib/emailService';
+import { createCustomerOrder, getCustomerOrder, getFounderStatus } from '@/lib/customerOrders';
+import {
+  listJobs, getJob, submitApplication, referralLookup, attachReferral, referralMe,
+  createTicket as createCustomerTicket, listTickets as listCustomerTickets, getTicket as getCustomerTicket, replyTicket, lifecycleRead, lifecycleWrite,
+  lifecycleList, postLead, ariaRank,
+} from '@/lib/customerFeatures';
 
+function getAllowedOrigin(request) {
+  const configured = (process.env.CORS_ORIGINS || '').split(',').map((origin) => origin.trim()).filter((origin) => origin && origin !== '*');
+  const base = process.env.NEXT_PUBLIC_BASE_URL || 'https://admin.smartsetupuae.ae';
+  const origins = [...new Set([...configured, base])];
+  const requestOrigin = request.headers.get('origin');
+  if (!requestOrigin) return origins[0];
+  return origins.includes(requestOrigin) ? requestOrigin : null;
+}
 
 const json = (data, status = 200, extraHeaders = {}) => {
   const r = NextResponse.json(data, { status });
   Object.entries(extraHeaders).forEach(([k, v]) => r.headers.set(k, v));
-  r.headers.set('Access-Control-Allow-Origin', process.env.CORS_ORIGINS || '*');
+  r.headers.set('Access-Control-Allow-Origin', process.env.NEXT_PUBLIC_BASE_URL || 'https://admin.smartsetupuae.ae');
   r.headers.set('Access-Control-Allow-Credentials', 'true');
   return r;
 };
 
-export async function OPTIONS() {
-  const r = new NextResponse(null, { status: 200 });
-  r.headers.set('Access-Control-Allow-Origin', process.env.CORS_ORIGINS || '*');
+export async function OPTIONS(request) {
+  const origin = getAllowedOrigin(request);
+  if (!origin) return new NextResponse(null, { status: 403 });
+  const r = new NextResponse(null, { status: 204 });
+  r.headers.set('Access-Control-Allow-Origin', origin);
   r.headers.set('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
   r.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   r.headers.set('Access-Control-Allow-Credentials', 'true');
@@ -40,6 +56,26 @@ export async function OPTIONS() {
 }
 
 const FREEZONES = ['ANCFZ', 'SPC', 'RAKEZ', 'IFZA', 'Meydan', 'SHAMS', 'DMCC', 'JAFZA', 'KIZAD', 'DAFZA'];
+const ORDER_FIELDS = ['status', 'notes'];
+const LEAD_FIELDS = ['status', 'lead_status', 'notes', 'assigned_manager', 'assigned_staff', 'assigned_reviewer', 'assignment_notes'];
+const PAYMENT_FIELDS = ['status', 'notes', 'ref_number'];
+const DOCUMENT_FIELDS = ['status', 'notes', 'rejection_reason'];
+const VALID_STATUSES = new Set(['new', 'contacted', 'qualified', 'won', 'lost', 'pending', 'payment_review', 'paid', 'cancelled', 'open', 'in_progress', 'resolved', 'closed']);
+const VALID_DOCUMENT_STATUSES = new Set(['pending', 'in_review', 'approved', 'rejected', 'resubmit_req']);
+let currencyRates = { ts: 0, values: { AED: 1, USD: 0.272, EUR: 0.25, GBP: 0.215, INR: 22.65 } };
+
+function pickFields(body, fields) {
+  return Object.fromEntries(fields.filter((field) => Object.prototype.hasOwnProperty.call(body || {}, field)).map((field) => [field, body[field]]));
+}
+
+function validNumber(value, { min = 0, max = 100000000 } = {}) {
+  const number = Number(value);
+  return Number.isFinite(number) && number >= min && number <= max ? number : null;
+}
+
+function customerEmail(request, body = {}) {
+  return String(body.email || body.customer_email || new URL(request.url).searchParams.get('email') || '').trim().toLowerCase();
+}
 
 async function handle(request, { params }) {
   const { path = [] } = await params;
@@ -52,7 +88,128 @@ async function handle(request, { params }) {
       return json({ ok: true, service: 'SmartSetupUAE Admin API', ts: new Date().toISOString() });
     }
 
+        // ============ CUSTOMER AUTH (Node replacement for FastAPI) ============
+        if (route === '/auth/signup' && method === 'POST') {
+          const body = await request.json();
+          const email = String(body?.email || '').trim().toLowerCase();
+          const password = String(body?.password || '');
+          if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return json({ error: 'Valid email is required' }, 400);
+          if (password.length < 6) return json({ error: 'Password must be at least 6 characters' }, 400);
+          const supabaseUrl = String(process.env.SUPABASE_URL || '').replace(/\/$/, '');
+          const anonKey = process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+          const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+          if (!supabaseUrl || !anonKey || !serviceKey) return json({ error: 'Supabase auth is not configured' }, 500);
+          const signup = await fetch(`${supabaseUrl}/auth/v1/signup`, {
+            method: 'POST',
+            headers: { apikey: anonKey, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              email,
+              password,
+              data: {
+                full_name: String(body?.full_name || '').trim(),
+                phone: String(body?.phone || '').trim(),
+                phone_country_code: String(body?.phone_country_code || '+971'),
+              },
+            }),
+          });
+          const signupData = await signup.json().catch(() => ({}));
+          if (!signup.ok) return json({ error: signupData.msg || signupData.error_description || 'Signup failed' }, signup.status);
+          const userId = signupData.id || signupData.user?.id;
+          if (!userId) return json({ error: 'Supabase signup returned no user id' }, 502);
+          const confirm = await fetch(`${supabaseUrl}/auth/v1/admin/users/${userId}`, {
+            method: 'PUT',
+            headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email_confirm: true }),
+          });
+          if (!confirm.ok) console.warn('[auth/signup] email auto-confirm failed', confirm.status);
+          const login = await fetch(`${supabaseUrl}/auth/v1/token?grant_type=password`, {
+            method: 'POST',
+            headers: { apikey: anonKey, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, password }),
+          });
+          const loginData = await login.json().catch(() => ({}));
+          if (!login.ok) return json({ error: loginData.msg || loginData.error_description || 'Auto-login after signup failed' }, login.status);
+          return json(loginData);
+        }
+
+
+    // ============ CUSTOMER ORDERS (server-priced Node contract) ============
+    if (route === '/orders' && method === 'POST') {
+      try {
+        return json(await createCustomerOrder(await request.json()), 201);
+      } catch (error) {
+        return json({ error: error.message || 'Could not create order' }, 400);
+      }
+    }
+
+    if (route === '/orders/founder-status' && method === 'GET') {
+      const { searchParams } = new URL(request.url);
+      return json(await getFounderStatus(searchParams.get('email') || ''));
+    }
+
+    if (route.startsWith('/orders/') && method === 'GET') {
+      const order = await getCustomerOrder(decodeURIComponent(route.split('/').pop()));
+      return order ? json(order) : json({ error: 'Order not found' }, 404);
+    }
     // ============ AUTH ============
+    if (route === '/payments/currencies' && method === 'GET') {
+      const labels = { AED: ['UAE Dirham', 'د.إ'], USD: ['US Dollar', '$'], EUR: ['Euro', '€'], GBP: ['British Pound', '£'], INR: ['Indian Rupee', '₹'] };
+      return json({ base: 'AED', currencies: Object.entries(currencyRates.values).map(([code, rate]) => ({ code, label: labels[code][0], symbol: labels[code][1], rate_from_aed: rate })) });
+    }
+    if (route === '/payments/checkout/session' && method === 'POST') {
+      const body = await request.json();
+      const amount = Number(body.amount_aed);
+      const currency = String(body.currency || 'AED').toUpperCase();
+      if (!Number.isFinite(amount) || amount <= 0 || amount > 1000000) return json({ error: 'Invalid amount' }, 400);
+      if (!['AED', 'USD', 'EUR', 'GBP', 'INR'].includes(currency)) return json({ error: 'Unsupported currency' }, 400);
+      const key = process.env.STRIPE_API_KEY;
+      if (!key) return json({ error: 'Stripe is not configured' }, 503);
+      const rates = currencyRates.values;
+      const converted = Math.round(amount * Number(rates[currency] || 1) * 100);
+      const origin = String(body.origin_url || process.env.NEXT_PUBLIC_BASE_URL || '').replace(/\/$/, '');
+      if (!origin || !body.customer_email) return json({ error: 'origin_url and customer_email are required' }, 400);
+      const form = new URLSearchParams({ mode: 'payment', success_url: `${origin}/checkout/success?session_id={CHECKOUT_SESSION_ID}`, cancel_url: `${origin}/checkout`, 'line_items[0][price_data][currency]': currency.toLowerCase(), 'line_items[0][price_data][product_data][name]': String(body.description || 'SmartSetupUAE Order'), 'line_items[0][price_data][unit_amount]': String(converted), 'line_items[0][quantity]': '1', customer_email: String(body.customer_email), 'metadata[order_ref]': String(body.order_ref || ''), 'metadata[amount_aed]': String(amount) });
+      const stripe = await fetch('https://api.stripe.com/v1/checkout/sessions', { method: 'POST', headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/x-www-form-urlencoded' }, body: form });
+      const data = await stripe.json().catch(() => ({}));
+      return json(stripe.ok ? { ok: true, session_id: data.id, url: data.url, amount_aed: amount, currency } : { error: data.error?.message || 'Stripe session failed' }, stripe.ok ? 200 : 502);
+    }
+    if (route.startsWith('/payments/checkout/status/') && method === 'GET') {
+      const key = process.env.STRIPE_API_KEY;
+      if (!key) return json({ error: 'Stripe is not configured' }, 503);
+      const sessionId = decodeURIComponent(route.split('/').pop());
+      const stripe = await fetch(`https://api.stripe.com/v1/checkout/sessions/${encodeURIComponent(sessionId)}`, { headers: { Authorization: `Bearer ${key}` } });
+      const data = await stripe.json().catch(() => ({}));
+      return json(stripe.ok ? { id: data.id, status: data.status, payment_status: data.payment_status, customer_email: data.customer_details?.email || data.customer_email } : { error: data.error?.message || 'Stripe session lookup failed' }, stripe.ok ? 200 : 502);
+    }
+    if (route === '/payments/webhook/stripe' && method === 'POST') return json({ received: true });
+    if (route === '/careers/jobs' && method === 'GET') return json(await listJobs());
+    if (route.startsWith('/careers/jobs/') && method === 'GET') { const job = await getJob(decodeURIComponent(route.split('/').pop())); return job ? json(job) : json({ error: 'Job not found' }, 404); }
+    if (route === '/careers/applications' && method === 'POST') { try { return json(await submitApplication(await request.json()), 201); } catch (error) { return json({ error: error.message }, 400); } }
+    if (route.startsWith('/referral/lookup/') && method === 'GET') { const result = await referralLookup(decodeURIComponent(route.split('/').pop())); return result ? json(result) : json({ error: 'Invalid referral code' }, 404); }
+    if (route === '/referral/attach' && method === 'POST') { try { return json(await attachReferral(await request.json()), 201); } catch (error) { return json({ error: error.message }, 400); } }
+    if (route === '/referral/me' && method === 'GET') { const email = customerEmail(request); return email ? json(await referralMe(email)) : json({ error: 'customer email required' }, 400); }
+    if (route === '/support/tickets' && method === 'POST') { try { return json(await createCustomerTicket(await request.json(), customerEmail(request)), 201); } catch (error) { return json({ error: error.message }, 400); } }
+    if (route === '/support/tickets' && method === 'GET') return json(await listCustomerTickets(customerEmail(request), Object.fromEntries(new URL(request.url).searchParams)));
+    if (route.startsWith('/support/tickets/') && route.endsWith('/messages') && method === 'POST') { try { return json(await replyTicket(route.split('/')[3], await request.json(), customerEmail(request))); } catch (error) { return json({ error: error.message }, 400); } }
+    if (route.startsWith('/support/tickets/') && method === 'GET') { const ticket = await getCustomerTicket(route.split('/').pop()); return ticket ? json(ticket) : json({ error: 'Ticket not found' }, 404); }
+    if (route === '/lifecycle/progress/steps' && method === 'GET') return json({ steps: ['order_received', 'documents', 'compliance', 'licence', 'banking', 'complete'] });
+    if (route === '/lifecycle/profile' && method === 'GET') return json(await lifecycleRead('client_profiles', customerEmail(request)));
+    if (route === '/lifecycle/profile' && (method === 'PUT' || method === 'PATCH')) return json(await lifecycleWrite('client_profiles', customerEmail(request), await request.json()));
+    if (route === '/lifecycle/compliance' && method === 'GET') return json(await lifecycleRead('client_compliance', customerEmail(request)));
+    if (route === '/lifecycle/compliance' && (method === 'PUT' || method === 'PATCH')) return json(await lifecycleWrite('client_compliance', customerEmail(request), await request.json()));
+    if (route === '/lifecycle/appointments' && method === 'GET') return json({ appointments: await lifecycleList('client_appointments', customerEmail(request)) });
+    if (route === '/lifecycle/appointments' && method === 'POST') return json(await lifecycleWrite('client_appointments', customerEmail(request), await request.json()), 201);
+    if (route === '/lifecycle/vault' && method === 'GET') return json({ vault: await lifecycleList('client_vault', customerEmail(request)) });
+    if (route === '/lifecycle/vault' && method === 'POST') return json(await lifecycleWrite('client_vault', customerEmail(request), await request.json()), 201);
+    if (route === '/lifecycle/renewals' && method === 'GET') return json({ renewals: await lifecycleList('client_renewals', customerEmail(request)) });
+    if (route === '/lifecycle/invoices' && method === 'GET') return json({ invoices: await lifecycleList('client_invoices', customerEmail(request)) });
+    if (route === '/lifecycle/golden-visa/lead' && method === 'POST') return json(await postLead(await request.json()), 201);
+    if (route === '/ocr/types' && method === 'GET') return json({ types: ['passport', 'emirates_id', 'visa', 'utility_bill', 'trade_license', 'moa', 'tenancy_contract'] });
+    if (route === '/ocr/parse' && method === 'POST') return json({ ok: false, error: 'OCR provider is not configured for this deployment' }, 503);
+    if (route === '/photo/passportize' && method === 'POST') return json({ ok: false, error: 'Photo provider is not configured for this deployment' }, 503);
+    if (route === '/aria/smart-rank' && method === 'POST') return json(await ariaRank(await request.json()));
+    if (route === '/aria/save-lead' && method === 'POST') return json(await postLead(await request.json()), 201);
+
     if (route === '/admin/auth/login' && method === 'POST') {
       const body = await request.json();
       const { email, password, role } = body || {};
@@ -112,9 +269,10 @@ async function handle(request, { params }) {
     }
 
     if (route === '/admin/auth/change-password' && method === 'POST') {
-      const auth = await requireRole(request);
+      const auth = await requireRole(request, 'founder', 'manager', 'staff');
       if (!auth.ok) return json({ error: auth.error }, auth.status);
-      const { current, next } = await request.json();
+      const { current, next, confirm } = await request.json();
+      if (typeof next !== 'string' || next.length < 12 || next !== confirm) return json({ error: 'New password must be at least 12 characters and match confirmation' }, 400);
       const c = await col('admin_users');
       const user = await c.findOne({ id: auth.session.sub });
       if (!user) return json({ error: 'user not found' }, 404);
@@ -130,7 +288,7 @@ async function handle(request, { params }) {
 
     // ============ STATS ============
     if (route === '/admin/stats/overview' && method === 'GET') {
-      const auth = await requireRole(request);
+      const auth = await requireRole(request, 'founder', 'manager', 'staff');
       if (!auth.ok) return json({ error: auth.error }, auth.status);
 
       const [leads, prebookings, paid, docsPending, allMemberships, tiers] = await Promise.all([
@@ -166,7 +324,7 @@ async function handle(request, { params }) {
     }
 
     if (route === '/admin/stats/by-zone' && method === 'GET') {
-      const auth = await requireRole(request);
+      const auth = await requireRole(request, 'founder', 'manager', 'reviewer');
       if (!auth.ok) return json({ error: auth.error }, auth.status);
       const r = await sbGet('leads', 'select=zone&limit=10000');
       const counts = {};
@@ -179,7 +337,7 @@ async function handle(request, { params }) {
     }
 
     if (route === '/admin/stats/pipeline' && method === 'GET') {
-      const auth = await requireRole(request);
+      const auth = await requireRole(request, 'founder', 'manager', 'staff');
       if (!auth.ok) return json({ error: auth.error }, auth.status);
       const r = await sbGet('leads', 'select=status,lead_status&limit=10000');
       const buckets = { new: 0, contacted: 0, qualified: 0, won: 0, lost: 0 };
@@ -192,7 +350,7 @@ async function handle(request, { params }) {
     }
 
     if (route === '/admin/stats/activities-count' && method === 'GET') {
-      const auth = await requireRole(request);
+      const auth = await requireRole(request, 'founder', 'manager', 'staff');
       if (!auth.ok) return json({ error: auth.error }, auth.status);
       const total = await sbGet('activities_master', 'select=id', { count: true });
       const active = await sbGet('activities_master', 'select=id&or=(is_active.is.null,is_active.eq.true)', { count: true });
@@ -201,7 +359,7 @@ async function handle(request, { params }) {
 
     // ============ LEADS ============
     if (route === '/admin/leads' && method === 'GET') {
-      const auth = await requireRole(request);
+      const auth = await requireRole(request, 'founder', 'manager', 'staff');
       if (!auth.ok) return json({ error: auth.error }, auth.status);
       const url = new URL(request.url);
       const status = url.searchParams.get('status');
@@ -216,7 +374,8 @@ async function handle(request, { params }) {
       const auth = await requireRole(request, 'founder', 'manager', 'staff');
       if (!auth.ok) return json({ error: auth.error }, auth.status);
       const id = route.split('/').pop();
-      const body = await request.json();
+      const body = pickFields(await request.json(), LEAD_FIELDS);
+      if (body.status && !VALID_STATUSES.has(body.status)) return json({ error: 'Invalid lead status' }, 400);
       const r = await sbPatch('leads', `id=eq.${id}`, body);
       if (!r.ok) return json({ error: r.data }, r.status);
       await auditLog(auth.session, 'lead.update', { id, ...body });
@@ -225,17 +384,19 @@ async function handle(request, { params }) {
 
     // ============ ORDERS ============
     if (route === '/admin/orders' && method === 'GET') {
-      const auth = await requireRole(request);
+      const auth = await requireRole(request, 'founder', 'manager', 'staff');
       if (!auth.ok) return json({ error: auth.error }, auth.status);
       const r = await sbGet('checkout_orders', 'select=*&order=created_at.desc&limit=500');
       return json({ orders: r.data || [] });
     }
 
     if (route.startsWith('/admin/orders/') && method === 'PATCH') {
-      const auth = await requireRole(request, 'founder', 'manager', 'staff');
+      const auth = await requireRole(request, 'founder', 'manager');
       if (!auth.ok) return json({ error: auth.error }, auth.status);
       const id = route.split('/').pop();
-      const body = await request.json();
+      const body = pickFields(await request.json(), ORDER_FIELDS);
+      if (body.status && !VALID_STATUSES.has(body.status)) return json({ error: 'Invalid order status' }, 400);
+      if (!Object.keys(body).length) return json({ error: 'No editable fields supplied' }, 400);
       const r = await sbPatch('checkout_orders', `id=eq.${id}`, body);
       if (!r.ok) return json({ error: r.data }, r.status);
       await auditLog(auth.session, 'order.update', { id, ...body });
@@ -244,7 +405,7 @@ async function handle(request, { params }) {
 
     // ============ CLIENTS (merged leads + orders by email/phone) ============
     if (route === '/admin/clients' && method === 'GET') {
-      const auth = await requireRole(request);
+      const auth = await requireRole(request, 'founder', 'manager', 'staff');
       if (!auth.ok) return json({ error: auth.error }, auth.status);
       const [leadsR, ordersR] = await Promise.all([
         sbGet('leads', 'select=*&order=created_at.desc&limit=2000'),
@@ -272,7 +433,7 @@ async function handle(request, { params }) {
 
     // ============ DOCUMENTS / KYC ============
     if (route === '/admin/documents' && method === 'GET') {
-      const auth = await requireRole(request);
+      const auth = await requireRole(request, 'founder', 'manager', 'staff', 'reviewer');
       if (!auth.ok) return json({ error: auth.error }, auth.status);
       const url = new URL(request.url);
       const status = url.searchParams.get('status');
@@ -291,7 +452,9 @@ async function handle(request, { params }) {
       const auth = await requireRole(request, 'founder', 'manager', 'reviewer');
       if (!auth.ok) return json({ error: auth.error }, auth.status);
       const id = route.split('/').pop();
-      const body = await request.json();
+      const body = pickFields(await request.json(), DOCUMENT_FIELDS);
+      if (!body.status || !new Set(['pending', 'in_review', 'approved', 'rejected', 'resubmit_req']).has(body.status)) return json({ error: 'Valid document status is required' }, 400);
+      if (['rejected', 'resubmit_req'].includes(body.status) && (!body.rejection_reason || String(body.rejection_reason).length < 3)) return json({ error: 'A rejection reason is required' }, 400);
       const update = { ...body, reviewed_by: auth.session.email, reviewed_at: new Date().toISOString() };
       const r = await sbPatch('documents', `id=eq.${id}`, update);
       if (!r.ok) return json({ error: r.data }, r.status);
@@ -301,7 +464,7 @@ async function handle(request, { params }) {
 
     // ============ PAYMENTS ============
     if (route === '/admin/payments' && method === 'GET') {
-      const auth = await requireRole(request);
+      const auth = await requireRole(request, 'founder', 'manager', 'staff');
       if (!auth.ok) return json({ error: auth.error }, auth.status);
       const url = new URL(request.url);
       const status = url.searchParams.get('status');
@@ -315,7 +478,9 @@ async function handle(request, { params }) {
       const auth = await requireRole(request, 'founder', 'manager');
       if (!auth.ok) return json({ error: auth.error }, auth.status);
       const id = route.split('/').pop();
-      const body = await request.json();
+      const body = pickFields(await request.json(), PAYMENT_FIELDS);
+      if (body.status && !['pending', 'approved', 'rejected', 'paid', 'failed'].includes(body.status)) return json({ error: 'Invalid payment status' }, 400);
+      if (!Object.keys(body).length) return json({ error: 'No editable fields supplied' }, 400);
       const r = await sbPatch('payments', `id=eq.${id}`, { ...body, reviewed_by: auth.session.email, reviewed_at: new Date().toISOString() });
       if (!r.ok) return json({ error: r.data }, r.status);
       await auditLog(auth.session, 'payment.review', { id, ...body });
@@ -324,7 +489,7 @@ async function handle(request, { params }) {
 
     // ============ INVOICES (read-only, generated from orders) ============
     if (route === '/admin/invoices' && method === 'GET') {
-      const auth = await requireRole(request);
+      const auth = await requireRole(request, 'founder', 'manager', 'staff');
       if (!auth.ok) return json({ error: auth.error }, auth.status);
       const r = await sbGet('checkout_orders', 'select=*&order=created_at.desc&limit=500');
       const invoices = (r.data || []).map(o => ({
@@ -333,8 +498,8 @@ async function handle(request, { params }) {
         client_name: o.customer_name,
         client_email: o.customer_email,
         zone: o.freezone,
-        amount: Number(o.total_amount || o.base_price || 0),
-        booking_type: o.booking_type === 'prebook' ? `Pre-booking AED ${o.total_amount || 999}` : 'Full Payment',
+        amount: Number(o.final_total ?? o.base_price ?? 0),
+        booking_type: o.status === 'payment_review' ? `Payment review · AED ${Number(o.final_total ?? o.base_price ?? 0).toLocaleString()}` : 'Full Payment',
         date: o.created_at,
         status: o.status,
       }));
@@ -343,7 +508,7 @@ async function handle(request, { params }) {
 
     // ============ PRICING & PACKAGES ============
     if (route === '/admin/pricing' && method === 'GET') {
-      const auth = await requireRole(request);
+      const auth = await requireRole(request, 'founder', 'manager');
       if (!auth.ok) return json({ error: auth.error }, auth.status);
       const r = await sbGet('freezone_packages', 'select=*&order=freezone.asc,base_price.asc&limit=2000');
       const byZone = {};
@@ -373,10 +538,12 @@ async function handle(request, { params }) {
           const key = visaCount === 0 ? 'without_visa' : `with_${visaCount}_visa`;
           const price = u[key];
           if (price == null || price === '') continue;
+          const safePrice = validNumber(price, { min: 0.01 });
+          if (safePrice == null) return json({ error: `${key} must be a valid positive number` }, 400);
           // Try to update existing row for this zone+visa_count
           const existing = await sbGet('freezone_packages', `select=id&freezone=eq.${encodeURIComponent(u.freezone)}&visa_count=eq.${visaCount}&limit=1`);
           if (existing.data && existing.data.length) {
-            await sbPatch('freezone_packages', `id=eq.${existing.data[0].id}`, { base_price: Number(price), is_active: true });
+            await sbPatch('freezone_packages', `id=eq.${existing.data[0].id}`, { base_price: safePrice, is_active: true });
             results.push({ zone: u.freezone, visa_count: visaCount, action: 'updated' });
           } else {
             await sbPost('freezone_packages', {
@@ -386,7 +553,7 @@ async function handle(request, { params }) {
               duration_years: 1,
               visa_count: visaCount,
               shareholder_count: 1,
-              base_price: Number(price),
+              base_price: safePrice,
               currency: 'AED',
               is_active: true,
             });
@@ -400,7 +567,7 @@ async function handle(request, { params }) {
 
     // Per-freezone government costs (investor visa, establishment card, …)
     if (route === '/admin/pricing/visa-costs' && method === 'GET') {
-      const auth = await requireRole(request);
+      const auth = await requireRole(request, 'founder', 'manager');
       if (!auth.ok) return json({ error: auth.error }, auth.status);
       const r = await sbGet('freezone_pricing', 'select=*&order=freezone.asc&limit=200');
       const byZone = {};
@@ -424,7 +591,13 @@ async function handle(request, { params }) {
       for (const u of updates || []) {
         if (!u?.freezone) continue;
         const payload = { notes: 'edited in Admin → Pricing', updated_at: new Date().toISOString() };
-        FIELDS.forEach((f) => { if (u[f] !== undefined && u[f] !== '') payload[f] = Number(u[f]); });
+        for (const f of FIELDS) {
+          if (u[f] !== undefined && u[f] !== '') {
+            const value = validNumber(u[f]);
+            if (value == null) return json({ error: `${f} must be a valid non-negative number` }, 400);
+            payload[f] = value;
+          }
+        }
         const existing = await sbGet('freezone_pricing', `select=id&freezone=eq.${encodeURIComponent(u.freezone)}&limit=1`);
         if (existing.data && existing.data.length) {
           await sbPatch('freezone_pricing', `id=eq.${existing.data[0].id}`, payload);
@@ -453,14 +626,19 @@ async function handle(request, { params }) {
       const { packages } = await request.json();
       const results = [];
       for (const p of packages || []) {
+        const basePrice = validNumber(p.base_price, { min: 0 });
+        const durationYears = validNumber(p.duration_years || 1, { min: 1, max: 20 });
+        const visaCount = validNumber(p.visa_count || 0, { min: 0, max: 20 });
+        const shareholderCount = validNumber(p.shareholder_count || 1, { min: 1, max: 100 });
+        if ([basePrice, durationYears, visaCount, shareholderCount].some((value) => value == null)) return json({ error: 'Invalid package numeric values' }, 400);
         const payload = {
           freezone: zone,
           package_name: p.package_name || p.label || 'Package',
           package_type: p.package_type || 'license',
-          duration_years: Number(p.duration_years || 1),
-          visa_count: Number(p.visa_count || 0),
-          shareholder_count: Number(p.shareholder_count || 1),
-          base_price: Number(p.base_price || 0),
+          duration_years: durationYears,
+          visa_count: visaCount,
+          shareholder_count: shareholderCount,
+          base_price: basePrice,
           discount_price: p.discount_price != null ? Number(p.discount_price) : null,
           promotion_price: p.promotion_price != null ? Number(p.promotion_price) : null,
           currency: p.currency || 'AED',
@@ -488,9 +666,21 @@ async function handle(request, { params }) {
       return json({ ok: true });
     }
 
+    if (route.startsWith('/admin/packages/') && method === 'PATCH') {
+      const auth = await requireRole(request, 'founder');
+      if (!auth.ok) return json({ error: auth.error }, auth.status);
+      const id = route.split('/').pop();
+      const body = await request.json();
+      if (typeof body.is_active !== 'boolean') return json({ error: 'is_active must be boolean' }, 400);
+      const r = await sbPatch('freezone_packages', `id=eq.${id}`, { is_active: body.is_active });
+      if (!r.ok) return json({ error: r.data }, r.status);
+      await auditLog(auth.session, 'package.activation.update', { id, is_active: body.is_active });
+      return json({ ok: true });
+    }
+
     // ============ COUPONS ============
     if (route === '/admin/coupons' && method === 'GET') {
-      const auth = await requireRole(request);
+      const auth = await requireRole(request, 'founder', 'manager');
       if (!auth.ok) return json({ error: auth.error }, auth.status);
       const r = await sbGet('coupons', 'select=*&order=created_at.desc');
       return json({ coupons: r.data || [] });
@@ -528,7 +718,7 @@ async function handle(request, { params }) {
 
     // ============ FOUNDERS CLUB ============
     if (route === '/admin/founders-club' && method === 'GET') {
-      const auth = await requireRole(request);
+      const auth = await requireRole(request, 'founder', 'manager');
       if (!auth.ok) return json({ error: auth.error }, auth.status);
 
       const [r, tiersR, profilesR] = await Promise.all([
@@ -632,6 +822,80 @@ async function handle(request, { params }) {
       if (!r.ok) return json({ error: r.data }, r.status);
       await auditLog(auth.session, 'founders_club.update', { id, ...patch });
       return json({ ok: true });
+    }
+
+    // ============ PUBLIC CUSTOMER CATALOG (Node replacement for FastAPI) ============
+    if (route === '/catalog' && method === 'GET') {
+      const [jurisdictionRows, packageRows, addonRows, packageAddonRows, discountRows] = await Promise.all([
+        col('jurisdiction_catalog').then((c) => c.find({ is_active: true }).toArray()),
+        col('package_catalog').then((c) => c.find({ is_active: true }).toArray()),
+        col('addon_catalog').then((c) => c.find({ is_active: true }).toArray()),
+        col('package_addon_catalog').then((c) => c.find({ is_active: true }).toArray()),
+        col('package_discount_catalog').then((c) => c.find({ is_active: true }).toArray()),
+      ]);
+      const publicRows = (rows) => rows.map(({ _id, ...rest }) => ({ id: String(_id), ...rest }));
+      const jurisdictions = publicRows(jurisdictionRows);
+      return json({
+        jurisdictions: jurisdictions.filter((row) => row.kind === 'freezone'),
+        mainland: jurisdictions.filter((row) => row.kind === 'mainland'),
+        coming_soon: jurisdictions.filter((row) => row.kind === 'coming_soon'),
+        packages: publicRows(packageRows),
+        addons: publicRows(addonRows),
+        package_addons: publicRows(packageAddonRows),
+        package_discounts: publicRows(discountRows),
+        updated_at: new Date().toISOString(),
+      });
+    }
+
+    if (route === '/catalog/jurisdictions' && method === 'GET') {
+      const { searchParams } = new URL(request.url);
+      const filter = { is_active: true };
+      if (searchParams.get('kind')) filter.kind = searchParams.get('kind');
+      const rows = await (await col('jurisdiction_catalog')).find(filter).toArray();
+      return json({ jurisdictions: rows.map(({ _id, ...rest }) => ({ id: String(_id), ...rest })) });
+    }
+
+    if (route === '/catalog/packages' && method === 'GET') {
+      const { searchParams } = new URL(request.url);
+      const filter = { is_active: true };
+      if (searchParams.get('freezone')) filter.freezone = searchParams.get('freezone');
+      const rows = await (await col('package_catalog')).find(filter).toArray();
+      return json({ packages: rows.map(({ _id, ...rest }) => ({ id: String(_id), ...rest })) });
+    }
+
+    if (route === '/catalog/addons' && method === 'GET') {
+      const [addons, packageAddons] = await Promise.all([
+        col('addon_catalog').then((c) => c.find({ is_active: true }).toArray()),
+        col('package_addon_catalog').then((c) => c.find({ is_active: true }).toArray()),
+      ]);
+      const publicRows = (rows) => rows.map(({ _id, ...rest }) => ({ id: String(_id), ...rest }));
+      return json({ addons: publicRows(addons), package_addons: publicRows(packageAddons) });
+    }
+
+    if (route.startsWith('/catalog/jurisdictions/') && method === 'GET') {
+      const slug = decodeURIComponent(route.split('/').pop());
+      const jurisdiction = await (await col('jurisdiction_catalog')).findOne({ slug, is_active: true });
+      if (!jurisdiction) return json({ error: 'Jurisdiction not found' }, 404);
+      const packages = await (await col('package_catalog')).find({ freezone: jurisdiction.name, is_active: true }).toArray();
+      const publicRow = ({ _id, ...rest }) => ({ id: String(_id), ...rest });
+      return json({ jurisdiction: publicRow(jurisdiction), packages: packages.map(publicRow) });
+    }
+
+    // ============ PUBLIC CUSTOMER SERVICES (Node replacement for FastAPI) ============
+    if (route === '/services' && method === 'GET') {
+      const { searchParams } = new URL(request.url);
+      const filter = { is_active: true };
+      if (searchParams.get('category')) filter.category = searchParams.get('category');
+      const rows = await (await col('service_catalog')).find(filter).sort({ sort_order: 1 }).toArray();
+      return json({ services: rows.map(({ _id, ...rest }) => ({ id: String(_id), ...rest })) });
+    }
+
+    if (route.startsWith('/services/') && method === 'GET') {
+      const slug = decodeURIComponent(route.split('/').pop());
+      const service = await (await col('service_catalog')).findOne({ slug, is_active: true });
+      if (!service) return json({ error: 'Service not found' }, 404);
+      const { _id, ...rest } = service;
+      return json({ id: String(_id), ...rest });
     }
 
     // ============ JURISDICTION & PACKAGE CATALOG (Mongo, canonical prices) ============
@@ -849,6 +1113,10 @@ async function handle(request, { params }) {
       const body = await request.json();
       const { full_name, username, email, role, pin, password, assigned_manager } = body || {};
       if (!role) return json({ error: 'role required' }, 400);
+      if (!['founder', 'manager', 'staff', 'reviewer'].includes(role)) return json({ error: 'invalid role' }, 400);
+      if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return json({ error: 'valid email required' }, 400);
+      if (['staff', 'reviewer'].includes(role) && (!/^\d{4,6}$/.test(String(pin || '')))) return json({ error: 'staff and reviewer require a 4-6 digit PIN' }, 400);
+      if (['founder', 'manager'].includes(role) && (typeof password !== 'string' || password.length < 12)) return json({ error: 'founder and manager require a 12-character password' }, 400);
       if (auth.session.role === 'manager' && !['staff', 'reviewer'].includes(role)) {
         return json({ error: 'Manager can only create staff or reviewer' }, 403);
       }
@@ -903,8 +1171,11 @@ async function handle(request, { params }) {
       if (!auth.ok) return json({ error: auth.error }, auth.status);
       const id = route.split('/')[3];
       const { pin } = await request.json();
+      if (!/^\d{4,6}$/.test(String(pin || ''))) return json({ error: 'PIN must contain 4-6 digits' }, 400);
       const c = await col('admin_users');
       const target = await c.findOne({ id });
+      if (!target) return json({ error: 'user not found' }, 404);
+      if (auth.session.role === 'manager' && (target.assigned_manager !== auth.session.sub || !['staff', 'reviewer'].includes(target.role))) return json({ error: 'forbidden' }, 403);
       const hash = await bcrypt.hash(String(pin), 10);
       await c.updateOne({ id }, { $set: { pin_hash: hash, pin_updated_at: new Date() } });
       await auditLog(auth.session, 'staff.reset_pin', { id });
@@ -926,6 +1197,9 @@ async function handle(request, { params }) {
       const id = route.split('/')[3];
       const body = await request.json();
       const c = await col('admin_users');
+      const target = await c.findOne({ id });
+      if (!target) return json({ error: 'user not found' }, 404);
+      if (auth.session.role === 'manager' && (target.assigned_manager !== auth.session.sub || !['staff', 'reviewer'].includes(target.role))) return json({ error: 'forbidden' }, 403);
       const patch = {};
       if (body.is_active !== undefined) patch.is_active = !!body.is_active;
       if (body.full_name) patch.full_name = body.full_name;
@@ -951,7 +1225,7 @@ async function handle(request, { params }) {
 
     // ============ SETTINGS ============
     if (route === '/admin/settings' && method === 'GET') {
-      const auth = await requireRole(request);
+      const auth = await requireRole(request, 'founder');
       if (!auth.ok) return json({ error: auth.error }, auth.status);
       const c = await col('site_config');
       const cfg = (await c.findOne({ _id: 'main' })) || {};
@@ -1148,6 +1422,7 @@ async function handle(request, { params }) {
       if (!body?.name || !body?.email || !body?.message) {
         return json({ error: 'name, email and message are required' }, 400);
       }
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(body.email)) || String(body.message).length > 4000) return json({ error: 'Invalid email or message too long' }, 400);
       try {
         const ticket = await createTicket({ ...body, source: 'form' });
         return json({ ok: true, ticketId: ticket.ticketId }, 201);
@@ -1266,6 +1541,9 @@ async function handle(request, { params }) {
 
       if (sub === 'attachments' && path[4] === 'sign-download' && method === 'POST') {
         const { path: objPath } = await request.json();
+        const ticket = await getTicket(ticketId);
+        const ticketIdPart = ticket?._id || ticketId;
+        if (!ticket || typeof objPath !== 'string' || !objPath.startsWith(`tickets/${ticketIdPart}/`)) return json({ error: 'Attachment does not belong to this ticket' }, 403);
         const bucket = process.env.SUPPORT_ATTACHMENTS_BUCKET || 'support-attachments';
         const r = await fetch(`${process.env.SUPABASE_URL}/storage/v1/object/sign/${bucket}/${objPath}`, {
           method: 'POST',
@@ -1348,6 +1626,23 @@ async function handle(request, { params }) {
       } catch (e) {
         return json({ error: e.message }, 400);
       }
+    }
+
+    if (route === '/notify/email/test' && method === 'POST') {
+      const auth = await requireRole(request, 'founder', 'manager');
+      if (!auth.ok) return json({ error: auth.error }, auth.status);
+      const body = await request.json();
+      const aliases = ['account', 'compliance', 'foundersclub', 'noreply', 'sales', 'support', 'visa'];
+      if (!aliases.includes(body.from_alias) || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(body.to || ''))) return json({ error: 'Valid recipient and sender alias required' }, 400);
+      const result = await sendRoutedEmail({
+        type: body.from_alias,
+        to: body.to,
+        subject: String(body.subject || 'SmartSetupUAE test email').slice(0, 200),
+        html: String(body.html || '<p>SmartSetupUAE test email</p>').slice(0, 20000),
+        userId: auth.session.sub,
+        relatedModule: 'email-health-test',
+      });
+      return json({ ok: result.success, id: result.messageId, error: result.success ? undefined : result.message }, result.success ? 200 : 502);
     }
 
     return json({ error: `Route ${method} ${route} not found` }, 404);

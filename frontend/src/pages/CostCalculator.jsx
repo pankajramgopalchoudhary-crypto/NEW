@@ -37,6 +37,7 @@ const FREE_ADDONS = [
 export default function CostCalculator() {
   const navigate = useNavigate();
   const [zones, setZones] = useState([]);
+  const [catalogPackages, setCatalogPackages] = useState([]);
   const [addonOptions, setAddonOptions] = useState([]);
   const [packageDiscounts, setPackageDiscounts] = useState([]); // per-zone multi-year discounts from Supabase
   const [zoneId, setZoneId] = useState('');
@@ -79,35 +80,65 @@ export default function CostCalculator() {
       });
     // Multi-year discounts come from the canonical catalog (Mongo), not the client.
     catalogApi.all()
-      .then((data) => { if (!cancelled) setPackageDiscounts(data.package_discounts || []); })
-      .catch((err) => { if (!cancelled) console.warn('[calc] package discounts load failed', err); });
+      .then((data) => {
+        if (cancelled) return;
+        setCatalogPackages(data.packages || []);
+        setPackageDiscounts(data.package_discounts || []);
+      })
+      .catch((err) => { if (!cancelled) console.warn('[calc] catalog load failed', err); });
     return () => { cancelled = true; };
   }, []);
 
   const zone = zones.find((z) => (z.selection_id || z.id) === zoneId) || null;
 
-  // Build duration options dynamically per zone using package_discounts.
-  // Schema: package_discounts(package_id, years, discount_pct, is_active)
-  // If the selected zone has rows, build options from them; otherwise show 1-year only.
+  // Build duration options dynamically from the actual package catalog for the
+  // selected free zone or mainland jurisdiction. This lets us show the available
+  // 1/2/3/4/5-year tabs when the underlying package data exists, and hide the
+  // tab when the zone does not offer that duration.
   const durationOptions = useMemo(() => {
     if (!zone) return DURATION_OPTIONS_FALLBACK;
-    const zoneKey = String(zone.package_id || zone.selection_id || zone.id || '').toLowerCase();
+    const zoneLabel = String(zone.name || zone.freezone || '').trim();
     const zoneSlug = String(zone.slug || zone.zone_slug || '').toLowerCase();
-    const matching = packageDiscounts.filter((d) => {
-      const pid = String(d.package_id || '').toLowerCase();
-      const zs  = String(d.zone_slug || d.freezone || '').toLowerCase();
-      return (pid && pid === zoneKey) || (zs && zoneSlug && zs.includes(zoneSlug));
+
+    const matchingPackages = (catalogPackages || []).filter((pkg) => {
+      const freezone = String(pkg.freezone || pkg.freezone_name || '').trim();
+      const slug = String(pkg.slug || '').toLowerCase();
+      return freezone && (
+        freezone.toLowerCase() === zoneLabel.toLowerCase() ||
+        slug === zoneSlug ||
+        slugify(freezone) === zoneSlug
+      );
     });
-    const opts = [{ id: '1y', label: '1 Year', years: 1, discountPct: 0 }];
-    matching.forEach((d) => {
-      const years = Number(d.years || d.duration_years || 1);
-      const pct = Number(d.discount_pct || d.percent || 0);
-      if (years > 1 && pct > 0 && !opts.find((o) => o.years === years)) {
-        opts.push({ id: `${years}y`, label: `${years} Years`, years, discountPct: pct });
+
+    const opts = new Map();
+    const pushYear = (years, pct = 0) => {
+      if (!Number.isFinite(years) || years <= 0) return;
+      const normalized = Number(years);
+      if (!opts.has(normalized)) {
+        opts.set(normalized, { id: `${normalized}y`, label: `${normalized} Year${normalized > 1 ? 's' : ''}`, years: normalized, discountPct: Number(pct) || 0 });
+      } else if (Number(pct) > 0) {
+        opts.get(normalized).discountPct = Number(pct);
+      }
+    };
+
+    pushYear(1, 0);
+    matchingPackages.forEach((pkg) => {
+      const years = Number(pkg.duration_years || pkg.validity_years || 1);
+      pushYear(years, 0);
+    });
+
+    (packageDiscounts || []).forEach((d) => {
+      const freezone = String(d.freezone || d.zone_slug || '').toLowerCase();
+      const zoneName = String(zoneLabel || '').toLowerCase();
+      const durationText = String(d.duration || d.years || '').toLowerCase();
+      const years = Number(d.years || d.duration_years || (durationText.match(/\d+/)?.[0] || 1));
+      if (freezone && (freezone === zoneName || freezone.includes(zoneName) || zoneName.includes(freezone))) {
+        pushYear(years, Number(d.discount_percent || d.percent || 0));
       }
     });
-    return opts.sort((a, b) => a.years - b.years);
-  }, [zone, packageDiscounts]);
+
+    return Array.from(opts.values()).sort((a, b) => a.years - b.years);
+  }, [zone, catalogPackages, packageDiscounts]);
 
   const zoneOffersDiscount = durationOptions.length > 1;
 

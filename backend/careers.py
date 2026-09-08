@@ -180,8 +180,7 @@ async def submit_application(payload: ApplicationCreate):
     # Send email to career@ inbox (best-effort)
     if RESEND_API_KEY:
         try:
-            import resend
-            resend.api_key = RESEND_API_KEY
+            from notifications import send_and_log_email
             html = f"""
             <h2>New application: {app.job_title}</h2>
             <p><b>Name:</b> {app.name}</p>
@@ -193,13 +192,14 @@ async def submit_application(payload: ApplicationCreate):
             <hr/>
             <p><b>Cover letter:</b><br/>{(app.cover_letter or '').replace(chr(10), '<br/>')}</p>
             """
-            resend.Emails.send({
-                "from": RESEND_FROM_CAREER,
-                "to": [CAREER_INBOX],
-                "reply_to": app.email,
-                "subject": f"[Careers] {app.job_title} — {app.name}",
-                "html": html,
-            })
+            await send_and_log_email(
+                to=CAREER_INBOX,
+                subject=f"[Careers] {app.job_title} — {app.name}",
+                html=html,
+                from_alias="careers",
+                event_type="career_application",
+                template="career_application",
+            )
         except Exception as e:  # noqa
             logger.warning("Career email failed: %s", e)
 

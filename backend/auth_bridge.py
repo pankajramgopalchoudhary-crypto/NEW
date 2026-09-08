@@ -80,6 +80,11 @@ async def signup(req: SignupRequest):
         if login_resp.status_code >= 400:
             body = login_resp.json() if login_resp.headers.get("content-type", "").startswith("application/json") else {"msg": login_resp.text}
             raise HTTPException(login_resp.status_code, body.get("msg") or "Auto-login after signup failed")
+        try:
+            from notify_triggers import notify_registration
+            await notify_registration(client_email=req.email, client_name=req.full_name or "")
+        except Exception as exc:
+            logger.warning("registration welcome email failed: %s", exc)
         return login_resp.json()
 
 

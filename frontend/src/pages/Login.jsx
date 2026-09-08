@@ -56,9 +56,12 @@ export default function Login() {
   };
 
   const handleOAuth = (provider) => {
-    const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
+    const supabaseUrl = process.env.REACT_APP_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
     if (!supabaseUrl) {
-      toast({ title: 'Configuration missing', description: 'Supabase URL is not set.' });
+      toast({
+        title: 'Configuration missing',
+        description: 'Set REACT_APP_SUPABASE_URL and REACT_APP_SUPABASE_ANON_KEY in frontend/.env, then restart the app.',
+      });
       return;
     }
     const redirectUrl = `${window.location.origin}/auth/callback${location.pathname === '/admin/login' ? '?redirect=/admin' : ''}`;

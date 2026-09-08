@@ -443,6 +443,18 @@ async def patch_ticket(tid: str, body: TicketPatch, authorization: Optional[str]
         })
     await _tickets.update_one({"_id": tid}, {"$set": payload})
     fresh = await _tickets.find_one({"_id": tid})
+    if body.status in ("resolved", "closed") and fresh and fresh.get("customer_email"):
+        try:
+            from notify_triggers import notify_ticket_resolved
+            await notify_ticket_resolved(
+                client_email=fresh["customer_email"],
+                client_name=fresh.get("customer_name", ""),
+                ticket_id=tid,
+                ticket_number=fresh.get("ticket_number") or fresh.get("reference") or tid,
+                resolution_note=body.internal_note or "",
+            )
+        except Exception as exc:
+            logger.warning("[support] resolution email failed for %s: %s", tid, exc)
     return {"ok": True, "ticket": _ticket_doc(fresh)}
 
 

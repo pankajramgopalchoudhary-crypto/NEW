@@ -39,10 +39,8 @@ You should have **all 4** ready:
    - Or use Hostinger MongoDB if your plan includes it
 2. **Supabase keys** (you already have them):
    - `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-3. **Resend API key** (already verified on `smartsetupuae.ae`):
-   - `re_4PWcv6uU_LWNwNX6dgVMfbMtSzczkU64Z`
-4. **Gemini API key**:
-   - `AQ.Ab8RN6L2GmpuPIz9fVLB18s-xPgJh4aZ7TTKnLVD-QSDV8NMmQ`
+3. **Resend API key**: create or copy it from the Resend dashboard. Never put it in this repository.
+4. **Gemini API key**: create or copy it from Google AI Studio. Never put it in this repository.
 
 ---
 
@@ -85,8 +83,8 @@ You now have `admin.smartsetupuae.ae` pointing at its own folder, isolated from 
    - **Application mode**: `Production`
    - **Application root**: `domains/admin.smartsetupuae.ae/public_html`
    - **Application URL**: `https://admin.smartsetupuae.ae`
-   - **Application startup file**: `node_modules/next/dist/bin/next` with args `start -p $PORT -H 0.0.0.0`
-   - Or use the simpler form: **Startup command**: `yarn start`
+   - **Application startup file**: `.next/standalone/server.js`
+   - **Startup command**: `node .next/standalone/server.js` with `PORT` supplied by Hostinger
 4. Click **Create**
 
 ### Step 4 — Add Environment Variables (the critical step)
@@ -114,7 +112,7 @@ You now have `admin.smartsetupuae.ae` pointing at its own folder, isolated from 
 
 4. **Save**.
 
-> 🔒 **Important**: NEVER paste these values into source code or commit them anywhere. Hostinger's Environment Variables panel is the right place — they're injected at runtime, never in the ZIP.
+> 🔒 **Important**: NEVER paste these values into source code, documentation, or commit them anywhere. Hostinger's Environment Variables panel is the right place; they are injected at runtime.
 
 ### Step 5 — Install dependencies + start
 
@@ -150,7 +148,7 @@ Then click **Start Application** (or **Restart** if it auto-started).
 | Login works but dashboard 401 | `ADMIN_JWT_SECRET` differs between server restarts | Set a stable value in Environment Variables, never auto-generate |
 | Supabase queries return 401 | `SUPABASE_SERVICE_ROLE_KEY` truncated | Keys are ~250 chars; copy carefully from Supabase dashboard |
 | Aria AI returns "model not found" | Old Gemini model name | Code uses `gemini-2.5-flash` which is current. If issue persists, set `GEMINI_MODEL=gemini-2.5-flash` explicitly. |
-| PIN emails don't arrive | `RESEND_FROM_EMAIL` domain not verified in Resend dashboard | You already verified ✅ — should work. Check Resend → Logs to see deliveries. |
+| PIN emails don't arrive | `RESEND_FROM_EMAIL` domain not verified in Resend dashboard | Verify `smartsetupuae.ae`, check Resend → Logs, and confirm the recipient policy. |
 | Build fails on `yarn install` | Node version too old | Set Node version to `22.x` in hPanel |
 | Public website breaks after admin upload | Wrong folder | Make sure admin is in its own subdomain folder, NOT in `smartsetupuae.ae/public_html` |
 
@@ -169,18 +167,12 @@ Environment Variables persist across restarts.
 
 ---
 
-## 📋 Default test credentials (CHANGE AFTER FIRST LOGIN)
+## 📋 Admin bootstrap
 
-These are seeded on first request if no `admin_users` exist in Mongo:
-
-| Role | Email / Username | Password / PIN |
-|---|---|---|
-| Founder | `admin@smartsetupuae.ae` | `Admin@2026` |
-| Manager | `manager@smartsetupuae.ae` | `Manager@2026` |
-| Staff | `staff01` | PIN `1234` |
-| Reviewer | `reviewer01` | PIN `5678` |
-
-**🚨 Change these IMMEDIATELY after first login** via Settings → Change Password (for Founder/Manager) and Staff & Access → Reset PIN (for Staff/Reviewer).
+No default manager, staff, or reviewer credentials are created. Create the
+founder account explicitly with `FOUNDER_EMAIL` and `FOUNDER_PASSWORD`, or set
+`ADMIN_SEED_ON_START=true` only during a controlled first deployment. Remove
+that flag after the founder account is created.
 
 ---
 

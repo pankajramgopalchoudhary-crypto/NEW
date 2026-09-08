@@ -45,15 +45,12 @@ PRICE_KEYS = ["offer_price", "package_price", "display_price", "promotion_price"
               "discount_price", "base_price", "original_price", "price"]
 
 # ---- Data-quality rules (applied on every startup, idempotent) --------------
-# Partner/co-working listings that are not licence packages. They were dragging
-# the free zone's "from" price down to AED 1,925 / AED 0.
-PACKAGE_EXCLUSIONS = [
-    {"freezone": "DMCC", "package_name": "AstroLabs Package"},
-    {"freezone": "DMCC", "package_name": "Uptown Homeowners Package"},
-]
-# Free zones we only sell for a single licence term. Anything longer is hidden
-# so the displayed range stays "cheapest 1-year → most expensive 1-year".
-DURATION_ALLOWLIST = {"DMCC": {"1 Year"}}
+# Multi-year packages are valid product data when the free zone actually sells
+# them. Suppressing them here causes the catalog and the customer pricing tabs to
+# hide legitimate 2/3/4/5-year offers. Keep the list empty so the app shows the
+# actual package durations available for each free zone or mainland jurisdiction.
+PACKAGE_EXCLUSIONS = []
+DURATION_ALLOWLIST = {}
 
 
 def _now() -> str:

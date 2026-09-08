@@ -20,8 +20,6 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from emergentintegrations.llm.chat import LlmChat, UserMessage, ImageContent  # type: ignore
-
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/photo", tags=["photo"])
 
@@ -65,6 +63,7 @@ async def passportize(req: PassportizeRequest):
         raw = raw.split(",", 1)[-1]
 
     try:
+        from emergentintegrations.llm.chat import LlmChat, UserMessage, ImageContent  # type: ignore
         chat = (
             LlmChat(
                 api_key=EMERGENT_LLM_KEY,

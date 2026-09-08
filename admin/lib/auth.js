@@ -27,78 +27,43 @@ export function canAccess(role, perm) {
 }
 
 export async function seedDefaultUsers() {
+  if (process.env.ADMIN_SEED_ON_START !== 'true') return { seeded: false, count: 0 };
+  if (!process.env.FOUNDER_EMAIL || !process.env.FOUNDER_PASSWORD) {
+    throw new Error('FOUNDER_EMAIL and FOUNDER_PASSWORD are required when ADMIN_SEED_ON_START=true');
+  }
   const c = await col('admin_users');
   const count = await c.countDocuments({});
   if (count > 0) return { seeded: false, count };
 
   const founderHash = await bcrypt.hash(process.env.FOUNDER_PASSWORD, 10);
-  const managerHash = await bcrypt.hash('Manager@2026', 10);
-  const staffPin = await bcrypt.hash('1234', 10);
-  const reviewerPin = await bcrypt.hash('5678', 10);
 
-  await c.insertMany([
+  await c.insertOne(
     {
       id: uuid(),
       role: 'founder',
-      email: process.env.FOUNDER_EMAIL || 'admin@smartsetupuae.ae',
+      email: process.env.FOUNDER_EMAIL.toLowerCase().trim(),
       username: 'founder',
-      full_name: 'Pankaj Choudhary',
+      full_name: 'Founder',
       password_hash: founderHash,
       pin_hash: null,
       is_active: true,
       assigned_manager: null,
       created_at: new Date(),
     },
-    {
-      id: uuid(),
-      role: 'manager',
-      email: 'manager@smartsetupuae.ae',
-      username: 'manager',
-      full_name: 'Default Manager',
-      password_hash: managerHash,
-      pin_hash: null,
-      is_active: true,
-      assigned_manager: null,
-      created_at: new Date(),
-    },
-    {
-      id: uuid(),
-      role: 'staff',
-      email: 'staff@smartsetupuae.ae',
-      username: 'staff01',
-      full_name: 'Default Staff',
-      password_hash: null,
-      pin_hash: staffPin,
-      is_active: true,
-      assigned_manager: null,
-      created_at: new Date(),
-    },
-    {
-      id: uuid(),
-      role: 'reviewer',
-      email: 'reviewer@smartsetupuae.ae',
-      username: 'reviewer01',
-      full_name: 'Default Reviewer',
-      password_hash: null,
-      pin_hash: reviewerPin,
-      is_active: true,
-      assigned_manager: null,
-      created_at: new Date(),
-    },
-  ]);
-  return { seeded: true, count: 4 };
+  );
+  return { seeded: true, count: 1 };
 }
 
 export async function loginWithPassword(email, password, expectRole) {
   await seedDefaultUsers();
   const c = await col('admin_users');
   const user = await c.findOne({ email: email.toLowerCase().trim() });
-  if (!user) return { ok: false, error: 'No such user' };
+  if (!user) return { ok: false, error: 'Invalid credentials' };
   if (!user.is_active) return { ok: false, error: 'Account locked. Contact founder.' };
-  if (expectRole && user.role !== expectRole) return { ok: false, error: `This account is not a ${expectRole}` };
-  if (!user.password_hash) return { ok: false, error: 'This account uses PIN login' };
+  if (expectRole && user.role !== expectRole) return { ok: false, error: 'Invalid credentials' };
+  if (!user.password_hash) return { ok: false, error: 'Invalid credentials' };
   const ok = await bcrypt.compare(password, user.password_hash);
-  if (!ok) return { ok: false, error: 'Wrong password' };
+  if (!ok) return { ok: false, error: 'Invalid credentials' };
   return { ok: true, user };
 }
 
@@ -106,12 +71,12 @@ export async function loginWithPin(username, pin, expectRole) {
   await seedDefaultUsers();
   const c = await col('admin_users');
   const user = await c.findOne({ username: username.toLowerCase().trim() });
-  if (!user) return { ok: false, error: 'No such user' };
+  if (!user) return { ok: false, error: 'Invalid credentials' };
   if (!user.is_active) return { ok: false, error: 'Account locked. Contact founder.' };
-  if (expectRole && user.role !== expectRole) return { ok: false, error: `This account is not a ${expectRole}` };
-  if (!user.pin_hash) return { ok: false, error: 'This account uses password login' };
+  if (expectRole && user.role !== expectRole) return { ok: false, error: 'Invalid credentials' };
+  if (!user.pin_hash) return { ok: false, error: 'Invalid credentials' };
   const ok = await bcrypt.compare(pin, user.pin_hash);
-  if (!ok) return { ok: false, error: 'Wrong PIN' };
+  if (!ok) return { ok: false, error: 'Invalid credentials' };
   return { ok: true, user };
 }
 

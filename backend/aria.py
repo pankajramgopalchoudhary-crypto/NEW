@@ -14,8 +14,6 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 import httpx
 
-from emergentintegrations.llm.chat import LlmChat, UserMessage, TextDelta, StreamDone
-
 logger = logging.getLogger(__name__)
 
 EMERGENT_LLM_KEY = os.environ.get("EMERGENT_LLM_KEY", "")
@@ -293,6 +291,7 @@ async def emergent_stream(system: str, user: str):
     Falls back when the direct Gemini key is invalid / quota-exhausted.
     """
     try:
+        from emergentintegrations.llm.chat import LlmChat, UserMessage  # type: ignore
         chat = (LlmChat(
             api_key=EMERGENT_LLM_KEY,
             session_id=f"aria-{abs(hash(user)) % 10**9}",

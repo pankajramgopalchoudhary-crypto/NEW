@@ -27,7 +27,8 @@ try:
 except Exception:
     pass
 
-# Import the FastAPI ASGI app.
+# Import the FastAPI ASGI app. Hostinger must provide a Python application;
+# uploading this folder to ordinary public_html will not execute Python.
 from server import app as asgi_app  # noqa: E402
 
 # Bridge ASGI → WSGI so Passenger can serve it.

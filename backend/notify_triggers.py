@@ -69,10 +69,15 @@ def _shell(title: str, body_html: str, cta_text: Optional[str] = None, cta_url: 
 
 
 async def _dual_send(name: str, email: Optional[str], whatsapp: Optional[str],
-                     subject: str, html: str, wa_text: str) -> Dict[str, Any]:
+                     subject: str, html: str, wa_text: str,
+                     *, ticket_id: Optional[str] = None,
+                     order_id: Optional[str] = None) -> Dict[str, Any]:
     out = {"event": name, "ts": datetime.now(timezone.utc).isoformat()}
     if email:
-        out["email"] = await _send_resend_email(email, subject, html)
+        out["email"] = await _send_resend_email(
+          email, subject, html, event_type=name,
+          ticket_id=ticket_id, order_id=order_id,
+        )
     if whatsapp:
         out["whatsapp"] = await _send_wa(_e164(whatsapp), wa_text)
     # also mirror to admin
@@ -82,6 +87,19 @@ async def _dual_send(name: str, email: Optional[str], whatsapp: Optional[str],
         except Exception as e:
             logger.warning("Admin WA mirror failed: %s", e)
     return out
+
+
+async def notify_registration(*, client_email: str, client_name: str = "") -> Dict[str, Any]:
+    html = _shell(
+        "Welcome to SmartSetupUAE",
+        f"<p>Hi {client_name or 'there'},</p><p>Your client account is ready. You can now compare packages, place orders, upload KYC documents, and track support from your portal.</p>",
+        cta_text="Open client portal", cta_url=f"{BRAND_URL}/login",
+    )
+    return await _dual_send(
+        "registration_welcome", client_email or None, None,
+        "Welcome to SmartSetupUAE — your client account is ready", html,
+        f"Welcome to SmartSetupUAE. Open your client portal: {BRAND_URL}/login",
+    )
 
 
 # ------------------- 1. LEAD SUBMITTED -------------------
@@ -117,7 +135,7 @@ async def notify_order_placed(*, client_email: str, client_name: str = "",
                               client_whatsapp: str = "", order_ref: str = "",
                               amount: float = 0, currency: str = "AED",
                               package_name: str = "", line_items: Optional[List[str]] = None,
-                              paid: bool = True) -> Dict[str, Any]:
+                              paid: bool = True, order_id: Optional[str] = None) -> Dict[str, Any]:
     pretty_amount = f"{currency} {amount:,.2f}"
     items_html = ""
     if line_items:
@@ -150,7 +168,7 @@ async def notify_order_placed(*, client_email: str, client_name: str = "",
           f"Package: {package_name or '—'}\n\n"
           f"Track progress: {BRAND_URL}/dashboard")
     return await _dual_send("order_placed", client_email or None, client_whatsapp or None,
-                            subject, html, wa)
+                subject, html, wa, order_id=order_id or order_ref)
 
 
 # ------------------- 3. DOCUMENT APPROVED -------------------
@@ -200,7 +218,8 @@ async def notify_doc_rejected(*, client_email: str, client_name: str = "",
 async def notify_appointment_scheduled(*, client_email: str, client_name: str = "",
                                        client_whatsapp: str = "", appointment_type: str = "Medical Test",
                                        date_iso: str = "", location: str = "", address: str = "",
-                                       map_url: str = "", documents: Optional[List[str]] = None) -> Dict[str, Any]:
+                                       map_url: str = "", documents: Optional[List[str]] = None,
+                                       order_id: Optional[str] = None) -> Dict[str, Any]:
     pretty_date = date_iso
     try:
         pretty_date = datetime.fromisoformat(date_iso.replace("Z", "+00:00")).strftime("%A, %d %b %Y · %H:%M")
@@ -231,7 +250,7 @@ async def notify_appointment_scheduled(*, client_email: str, client_name: str = 
           f"{('Map: ' + map_url) if map_url else ''}\n{docs_wa}\n\n"
           f"Full details: {BRAND_URL}/dashboard")
     return await _dual_send("appointment_scheduled", client_email or None, client_whatsapp or None,
-                            subject, html, wa)
+                subject, html, wa, order_id=order_id)
 
 
 # ------------------- 6. RENEWAL REMINDER -------------------
@@ -270,7 +289,8 @@ async def notify_renewal_reminder(*, client_email: str, client_name: str = "",
 
 # ------------------- 7. FOUNDER CLUB PURCHASED -------------------
 async def notify_founder_club(*, client_email: str, client_name: str = "",
-                              client_whatsapp: str = "", expiry_date: str = "") -> Dict[str, Any]:
+                              client_whatsapp: str = "", expiry_date: str = "",
+                              order_id: Optional[str] = None) -> Dict[str, Any]:
     subject = "👑 Welcome to the SmartSetupUAE Founder Club"
     html = _shell(
         "Welcome to the Founder Club 👑",
@@ -290,4 +310,42 @@ async def notify_founder_club(*, client_email: str, client_name: str = "",
     wa = ("👑 Welcome to the SmartSetupUAE Founder Club! Your membership is now active. "
           f"Open your dashboard: {BRAND_URL}/dashboard")
     return await _dual_send("founder_club_purchased", client_email or None, client_whatsapp or None,
-                            subject, html, wa)
+                subject, html, wa, order_id=order_id)
+
+
+async def notify_ticket_resolved(*, client_email: str, client_name: str = "",
+                                 ticket_id: str, ticket_number: str = "",
+                                 resolution_note: str = "") -> Dict[str, Any]:
+    reference = ticket_number or ticket_id
+    html = _shell(
+        f"Ticket {reference} resolved",
+        f"<p>Hi {client_name or 'there'},</p><p>Your support ticket <b>{reference}</b> has been resolved.</p>"
+        f"{f'<p>Resolution note: {resolution_note}</p>' if resolution_note else ''}",
+        cta_text="View support history", cta_url=f"{BRAND_URL}/dashboard/support/{ticket_id}",
+    )
+    return await _dual_send(
+        "ticket_resolved", client_email or None, None,
+        f"[{reference}] Your SmartSetupUAE ticket is resolved", html,
+        f"Your SmartSetupUAE ticket {reference} has been resolved. Open: {BRAND_URL}/dashboard/support/{ticket_id}",
+        ticket_id=ticket_id,
+    )
+
+
+async def notify_invoice_created(*, client_email: str, client_name: str = "",
+                                 invoice_id: str, invoice_number: str = "",
+                                 order_id: str = "", total: float = 0,
+                                 currency: str = "AED", doc_type: str = "invoice") -> Dict[str, Any]:
+    reference = invoice_number or invoice_id
+    html = _shell(
+        f"{doc_type.replace('_', ' ').title()} {reference}",
+        f"<p>Hi {client_name or 'there'},</p><p>Your {doc_type.replace('_', ' ')} is ready.</p>"
+        f"<div style='background:#F8F3E8;padding:14px;border-radius:10px'><b>Reference:</b> {reference}<br>"
+        f"<b>Total:</b> {currency} {total:,.2f}</div>",
+        cta_text="Open client portal", cta_url=f"{BRAND_URL}/dashboard",
+    )
+    return await _dual_send(
+        "invoice_created", client_email or None, None,
+        f"Your SmartSetupUAE {doc_type.replace('_', ' ')} · {reference}", html,
+        f"Your {doc_type.replace('_', ' ')} {reference} is ready. Total: {currency} {total:,.2f}",
+        order_id=order_id or invoice_id,
+    )

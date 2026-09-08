@@ -9,15 +9,16 @@ CONTACT = {"name": "Test User", "email": "TEST_orders@example.com", "phone": "50
 
 
 # ---------- Service Catalog ----------
-def test_services_catalog_has_five_seeded():
+def test_services_catalog_has_annual_compliance_services():
     r = requests.get(f"{API}/services", timeout=30)
     assert r.status_code == 200
     svcs = {s["slug"]: s for s in r.json()["services"]}
     expected = {
         "corporate-tax-registration": (1000.0, "one-time"),
-        "corporate-tax-filing": (1000.0, "per-filing"),
-        "auditing": (1500.0, "monthly"),
-        "bookkeeping": (1200.0, "monthly"),
+        "corporate-tax-filing": (1000.0, "annual"),
+        "auditing": (18000.0, "annual"),
+        "bookkeeping": (14400.0, "annual"),
+        "vat-filing": (1500.0, "annual"),
         "founders-club-lifetime": (999.0, "one-time"),
     }
     for slug, (price, billing) in expected.items():
@@ -25,6 +26,7 @@ def test_services_catalog_has_five_seeded():
         assert svcs[slug]["price_aed"] == price
         assert svcs[slug]["billing"] == billing
         assert svcs[slug]["is_active"] is True
+    assert [option["annual"] for option in svcs["auditing"]["pricing_options"][:6]] == [18000.0, 20000.04, 24999.96, 30000.0, 35000.04, 39999.96]
 
 
 def test_service_by_slug_and_404():
@@ -52,7 +54,7 @@ def test_order_ignores_forged_price_single_service():
     assert body["id"]
 
 
-def test_order_multi_service_totals_2200():
+def test_order_multi_service_totals_15400():
     payload = {
         "items": [
             {"kind": "service", "slug": "corporate-tax-registration", "qty": 1},
@@ -62,7 +64,7 @@ def test_order_multi_service_totals_2200():
     }
     r = _post_order(payload)
     assert r.status_code in (200, 201), r.text
-    assert float(r.json()["final_total"]) == 2200.0
+    assert float(r.json()["final_total"]) == 15400.0
 
 
 def test_order_founders_club_999():
@@ -109,4 +111,4 @@ def test_order_get_snapshot():
     assert g.status_code == 200, g.text
     gbody = g.json()
     assert len(gbody.get("line_items", [])) >= 1
-    assert float(gbody["final_total"]) == 1500.0
+    assert float(gbody["final_total"]) == 18000.0
